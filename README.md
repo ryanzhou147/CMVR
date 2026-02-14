@@ -1,0 +1,1 @@
+TODO: Self-supervised contrastive learning for chest X-ray classification using PA/Lateral view pairs as natural augmentations, with pre-training on unlabeled scans followed by fine-tuning on disease labels.
