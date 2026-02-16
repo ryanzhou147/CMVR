@@ -1,7 +1,7 @@
 """
   1. Create a Kaggle account at https://www.kaggle.com
-  2. Set your API token: export KAGGLE_API_TOKEN=<your-token>
-     (Or place kaggle.json at ~/.kaggle/kaggle.json)
+  2. Add your API key to .env:
+       KAGGLE_API_TOKEN=<your-key>
   3. Run: uv run python -m data.download [--dest DATA_DIR]
 The dataset is ~45GB and contains 112,120 chest X-ray images.
 """
@@ -11,12 +11,15 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 DATASET_SLUG = "nih-chest-xrays/data"
 DEFAULT_DEST = "datasets/nih-chest-xrays"
 
 
 def download(dest: Path):
     """Download and extract the NIH Chest X-rays dataset."""
+    load_dotenv()
     dest.mkdir(parents=True, exist_ok=True)
 
     # Check if already downloaded
@@ -25,15 +28,11 @@ def download(dest: Path):
         print(f"Dataset appears already downloaded ({len(existing_images)} images in {dest})")
         return
 
-    if not os.environ.get("KAGGLE_API_TOKEN") and not (Path.home() / ".kaggle" / "kaggle.json").exists():
+    if not os.environ.get("KAGGLE_API_TOKEN"):
         print("ERROR: Kaggle credentials not found.")
-        print()
-        print("To set up, either:")
-        print("  export KAGGLE_API_TOKEN=<your-token>")
-        print("or:")
         print("  1. Go to https://www.kaggle.com/settings")
         print("  2. Scroll to API > Create New Token")
-        print("  3. Save the downloaded kaggle.json to ~/.kaggle/kaggle.json")
+        print("  3. Add KAGGLE_API_TOKEN=<your-key> to .env")
         sys.exit(1)
 
     from kaggle.api.kaggle_api_extended import KaggleApi
