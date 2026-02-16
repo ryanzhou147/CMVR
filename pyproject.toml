@@ -1,7 +1,18 @@
 [project]
 name = "cmvr"
 version = "0.1.0"
-description = "Add your description here"
+description = "Self-supervised pretraining on unlabeled chest X-rays for few-shot rare disease detection"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "torch>=2.6",
+    "torchvision>=0.21",
+    "pillow>=11.0",
+    "numpy>=2.2",
+    "pyyaml>=6.0",
+    "tqdm>=4.67",
+    "tensorboard>=2.19",
+    "kaggle>=2.0.0",
+    "python-dotenv>=1.2.1",
+    "matplotlib>=3.10.8",
+]
