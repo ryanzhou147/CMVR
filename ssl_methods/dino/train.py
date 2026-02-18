@@ -121,7 +121,8 @@ def train_dino(config: dict) -> None:
 
             total_loss += loss.item()
             total_grad_norm += grad_norm.item()
-            batch_pbar.set_postfix(loss=f"{loss.item():.4f}")
+            wandb.log({"loss/step": loss.item()}, step=global_step)
+            batch_pbar.set_postfix(loss=f"{loss.item():.6f}")
 
         scheduler.step()
         avg_loss = total_loss / len(dataloader)
@@ -130,7 +131,7 @@ def train_dino(config: dict) -> None:
         epoch_start_step = epoch * len(dataloader)
         epoch_momentum = float(momentum_schedule[min(epoch_start_step, total_steps - 1)])
 
-        epoch_pbar.set_postfix(loss=f"{avg_loss:.4f}", lr=f"{lr:.2e}")
+        epoch_pbar.set_postfix(loss=f"{avg_loss:.6f}", lr=f"{lr:.2e}")
         wandb.log({
             "loss/train": avg_loss,
             "lr": lr,
