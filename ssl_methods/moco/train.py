@@ -54,6 +54,7 @@ def train_moco(config: dict) -> None:
     scaler = GradScaler(device.type, enabled=(device.type == "cuda"))
 
     start_epoch = 0
+    global_step = 0
     best_loss = float("inf")
     wandb_run_id = None
 
@@ -66,6 +67,7 @@ def train_moco(config: dict) -> None:
         scheduler.load_state_dict(checkpoint["scheduler"])
         scaler.load_state_dict(checkpoint["scaler"])
         start_epoch = checkpoint["epoch"] + 1
+        global_step = checkpoint.get("global_step", start_epoch * len(dataloader))
         best_loss = checkpoint.get("best_loss", float("inf"))
         wandb_run_id = checkpoint.get("wandb_run_id")
 
@@ -96,17 +98,20 @@ def train_moco(config: dict) -> None:
             scaler.update()
 
             total_loss += loss.item()
-            batch_pbar.set_postfix(loss=f"{loss.item():.4f}")
+            wandb.log({"loss/step": loss.item()}, step=global_step)
+            global_step += 1
+            batch_pbar.set_postfix(loss=f"{loss.item():.6f}")
 
         scheduler.step()
         avg_loss = total_loss / len(dataloader)
         lr = optimizer.param_groups[0]["lr"]
 
-        epoch_pbar.set_postfix(loss=f"{avg_loss:.4f}", lr=f"{lr:.2e}")
+        epoch_pbar.set_postfix(loss=f"{avg_loss:.6f}", lr=f"{lr:.2e}")
         wandb.log({"loss/train": avg_loss, "lr": lr}, step=epoch)
 
         checkpoint_data = {
             "epoch": epoch,
+            "global_step": global_step,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
