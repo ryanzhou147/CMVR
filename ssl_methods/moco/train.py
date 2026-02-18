@@ -9,7 +9,7 @@ import wandb
 from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 
-from data import build_ssl_dataloader
+from ssl_methods.moco.data import build_moco_dataloader
 from ssl_methods.moco.model import MoCo
 
 
@@ -21,7 +21,7 @@ def train_moco(config: dict) -> None:
 
     print(f"Device: {device}")
     print("Building dataloader...")
-    dataloader = build_ssl_dataloader(config)
+    dataloader = build_moco_dataloader(config)
     print(f"Total batches per epoch: {len(dataloader)}")
 
     moco_cfg = config["moco"]
@@ -60,14 +60,14 @@ def train_moco(config: dict) -> None:
     resume_path = output_dir / "latest.pt"
     if resume_path.exists():
         print(f"Resuming from {resume_path}")
-        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-        model.load_state_dict(ckpt["model"])
-        optimizer.load_state_dict(ckpt["optimizer"])
-        scheduler.load_state_dict(ckpt["scheduler"])
-        scaler.load_state_dict(ckpt["scaler"])
-        start_epoch = ckpt["epoch"] + 1
-        best_loss = ckpt.get("best_loss", float("inf"))
-        wandb_run_id = ckpt.get("wandb_run_id")
+        checkpoint = torch.load(resume_path, map_location=device, weights_only=False)
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        scheduler.load_state_dict(checkpoint["scheduler"])
+        scaler.load_state_dict(checkpoint["scaler"])
+        start_epoch = checkpoint["epoch"] + 1
+        best_loss = checkpoint.get("best_loss", float("inf"))
+        wandb_run_id = checkpoint.get("wandb_run_id")
 
     wandb.init(
         project="cmvr-ssl",
@@ -77,12 +77,13 @@ def train_moco(config: dict) -> None:
         config=config,
     )
 
-    for epoch in range(start_epoch, total_epochs):
+    epoch_pbar = tqdm(range(start_epoch, total_epochs), desc="Pretraining", unit="epoch")
+    for epoch in epoch_pbar:
         model.train()
         total_loss = 0.0
 
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{total_epochs}")
-        for x_q, x_k in pbar:
+        batch_pbar = tqdm(dataloader, desc=f"  Epoch {epoch+1}/{total_epochs}", leave=False)
+        for x_q, x_k in batch_pbar:
             x_q, x_k = x_q.to(device), x_k.to(device)
 
             with autocast(device_type=device.type, enabled=(device.type == "cuda")):
@@ -95,16 +96,16 @@ def train_moco(config: dict) -> None:
             scaler.update()
 
             total_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            batch_pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         scheduler.step()
         avg_loss = total_loss / len(dataloader)
         lr = optimizer.param_groups[0]["lr"]
 
+        epoch_pbar.set_postfix(loss=f"{avg_loss:.4f}", lr=f"{lr:.2e}")
         wandb.log({"loss/train": avg_loss, "lr": lr}, step=epoch)
-        print(f"Epoch {epoch+1}/{total_epochs} — loss: {avg_loss:.4f}, lr: {lr:.6f}")
 
-        ckpt_data = {
+        checkpoint_data = {
             "epoch": epoch,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
@@ -114,14 +115,14 @@ def train_moco(config: dict) -> None:
             "wandb_run_id": wandb.run.id,
             "config": config,
         }
-        torch.save(ckpt_data, output_dir / "latest.pt")
+        torch.save(checkpoint_data, output_dir / "latest.pt")
 
         if avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(ckpt_data, output_dir / "best.pt")
+            torch.save(checkpoint_data, output_dir / "best.pt")
 
         if (epoch + 1) % config["training"]["checkpoint_every"] == 0:
-            torch.save(ckpt_data, output_dir / f"epoch_{epoch+1}.pt")
+            torch.save(checkpoint_data, output_dir / f"epoch_{epoch+1}.pt")
 
     wandb.finish()
     print(f"Training complete. Checkpoints saved to {output_dir}")
