@@ -15,4 +15,5 @@ dependencies = [
     "kaggle>=2.0.0",
     "python-dotenv>=1.2.1",
     "matplotlib>=3.10.8",
+    "wandb>=0.25.0",
 ]
