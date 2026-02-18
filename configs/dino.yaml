@@ -1,0 +1,55 @@
+# DINO Configuration
+# Reference: Caron et al. 2021 "Emerging Properties in Self-Supervised Vision Transformers"
+
+dino:
+  encoder: vit_b_16            # Backbone: vit_b_16, vit_b_32, resnet50, resnet18
+  out_dim: 65536               # DINO head prototype dimension (number of "visual words")
+
+  # Multi-crop strategy
+  n_global_crops: 2            # Large crops — fed to both student and teacher
+  n_local_crops: 6             # Small crops — fed to student only
+  local_crop_size: 96          # Resolution of local crops (px)
+  global_crop_scale: [0.4, 1.0]
+  local_crop_scale: [0.1, 0.4]
+
+  # Loss temperatures
+  student_temp: 0.1            # Higher = softer student distribution
+  teacher_temp: 0.04           # Lower = sharper teacher distribution (more confident)
+  center_momentum: 0.9         # EMA coefficient for the centering buffer
+
+  # Teacher EMA momentum schedule (cosine from start → end over all steps)
+  teacher_momentum_start: 0.996
+  teacher_momentum_end: 1.0
+
+training:
+  batch_size: 64               # ViT needs less batch memory than ResNet
+  lr: 5.0e-4
+  weight_decay: 4.0e-2         # AdamW weight decay
+  epochs: 100
+  warmup_epochs: 10
+  checkpoint_every: 10
+  output_dir: outputs/dino
+
+data:
+  image_size: 224              # Global crop output size
+  num_workers: 5
+  cache_in_ram: true   # load all PNGs into RAM on startup (~2 GB), eliminates disk I/O
+  datasets:
+    - name: nih
+      root_dir: datasets/nih-chest-xrays
+      txt_file: datasets/nih-chest-xrays/test.txt   # use only the test split (11 212 images)
+    # - name: chexpert
+    #   root_dir: /data/chexpert
+    # - name: mimic-cxr
+    #   root_dir: /data/mimic-cxr
+
+augmentations:
+  rotation_degrees: 10        # ±10° — models realistic patient positioning variation
+  color_jitter_prob: 0.8
+  color_jitter_brightness: 0.4
+  color_jitter_contrast: 0.4
+  color_jitter_saturation: 0.1  # low: grayscale images have no meaningful saturation
+  color_jitter_hue: 0.0         # zero: hue has no meaning in grayscale X-rays
+  grayscale_prob: 0.2
+  gaussian_blur_prob: 0.5
+  gaussian_blur_kernel: 23

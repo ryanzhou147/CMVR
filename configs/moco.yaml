@@ -1,0 +1,43 @@
+# MoCo v2 Configuration
+# Reference: He et al. 2020 (v1), Chen et al. 2020 (v2)
+
+moco:
+  encoder: resnet50        # ResNet backbone: resnet18 or resnet50
+  dim: 128                 # Projection head output dimension
+  queue_size: 65536        # Number of negative keys in the queue
+  momentum: 0.999          # EMA coefficient for the key encoder
+  temperature: 0.07        # InfoNCE temperature (lower = sharper)
+
+training:
+  batch_size: 256          # Can be small — negatives come from the queue
+  lr: 3.0e-2               # SGD learning rate (scaled by batch size: 0.03 * bs/256)
+  weight_decay: 1.0e-4
+  epochs: 200
+  warmup_epochs: 10
+  checkpoint_every: 10
+  output_dir: outputs/moco
+
+data:
+  image_size: 224
+  num_workers: 5
+  cache_in_ram: true   # load all PNGs into RAM on startup (~2 GB), eliminates disk I/O
+  datasets:
+    - name: nih
+      root_dir: datasets/nih-chest-xrays
+      txt_file: datasets/nih-chest-xrays/test.txt   # use only the test split (11 212 images)
+    # - name: chexpert
+    #   root_dir: /data/chexpert
+    # - name: mimic-cxr
+    #   root_dir: /data/mimic-cxr
+
+augmentations:
+  random_crop_scale: [0.2, 1.0]
+  rotation_degrees: 10        # ±10° — models realistic patient positioning variation
+  color_jitter_prob: 0.8
+  color_jitter_brightness: 0.4
+  color_jitter_contrast: 0.4
+  color_jitter_saturation: 0.1  # low: grayscale images have no meaningful saturation
+  color_jitter_hue: 0.0         # zero: hue has no meaning in grayscale X-rays
+  grayscale_prob: 0.2
+  gaussian_blur_prob: 0.5
+  gaussian_blur_kernel: 23
