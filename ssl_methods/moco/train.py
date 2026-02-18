@@ -73,7 +73,7 @@ def train_moco(config: dict) -> None:
 
     wandb.init(
         project="cmvr-ssl",
-        name=f"moco-{moco_cfg['encoder']}",
+        name=config["training"]["run_name"],
         id=wandb_run_id,
         resume="allow",
         config=config,
