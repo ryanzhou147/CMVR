@@ -91,6 +91,11 @@ class DINO(nn.Module):
         backbone_s, feature_dim = build_backbone(encoder_name)
         backbone_t, _ = build_backbone(encoder_name)
 
+        # ViT requires a fixed input size; store it so forward() can resize local crops
+        self._fixed_size: int | None = (
+            getattr(backbone_s, "image_size", None) if encoder_name.startswith("vit") else None
+        )
+
         self.student = nn.Sequential(backbone_s, DINOHead(feature_dim, out_dim))
         self.teacher = nn.Sequential(backbone_t, DINOHead(feature_dim, out_dim))
 
@@ -120,6 +125,13 @@ class DINO(nn.Module):
             student_output: ``list`` of ``(B, out_dim)`` tensors — one per view.
             teacher_output: ``list`` of ``(B, out_dim)`` tensors — global views only.
         """
+        if self._fixed_size is not None:
+            s = self._fixed_size
+            views = [
+                F.interpolate(v, size=(s, s), mode="bilinear", align_corners=False)
+                if v.shape[-1] != s else v
+                for v in views
+            ]
         student_out = [self.student(v) for v in views]
         with torch.no_grad():
             teacher_out = [self.teacher(views[i]) for i in range(n_global)]
