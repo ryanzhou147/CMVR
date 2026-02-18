@@ -87,7 +87,7 @@ def train_dino(config: dict) -> None:
 
     wandb.init(
         project="cmvr-ssl",
-        name=f"dino-{dino_cfg['encoder']}",
+        name=config["training"]["run_name"],
         id=wandb_run_id,
         resume="allow",
         config=config,
