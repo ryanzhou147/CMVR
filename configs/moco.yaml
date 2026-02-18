@@ -9,6 +9,7 @@ moco:
   temperature: 0.07        # InfoNCE temperature (lower = sharper)
 
 training:
+  run_name: moco-resnet50
   batch_size: 256          # Can be small — negatives come from the queue
   lr: 3.0e-2               # SGD learning rate (scaled by batch size: 0.03 * bs/256)
   weight_decay: 1.0e-4
