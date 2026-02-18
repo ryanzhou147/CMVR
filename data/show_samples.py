@@ -1,4 +1,4 @@
-"""Display a 25x25 grid of sample chest X-rays from the dataset.
+"""Display a 5x5 grid of sample chest X-rays from the dataset.
 
 Usage:
   uv run python scripts/show_samples.py [--data-dir datasets/nih-chest-xrays] [--split train]
@@ -16,17 +16,40 @@ GRID = 25
 TOTAL = GRID * GRID
 
 
-def find_images(data_dir: Path, split: str | None) -> list[Path]:
-    """Get image paths, optionally filtered by split file."""
+def reservoir_sample(iterator, k: int, rng: random.Random) -> list:
+    """Pick k items from an iterator without loading it all into memory."""
+    result = []
+    for i, item in enumerate(iterator):
+        if i < k:
+            result.append(item)
+        else:
+            j = rng.randint(0, i)
+            if j < k:
+                result[j] = item
+    return result
+
+
+def sample_images(data_dir: Path, split: str | None, n: int, rng: random.Random) -> list[Path]:
+    """Sample n image paths without loading the full list into memory."""
     if split:
         split_file = data_dir / f"{split}.txt"
         if split_file.exists():
             filenames = split_file.read_text().strip().splitlines()
-            # Images are spread across images_001..images_012 subdirs
-            all_pngs = {p.name: p for p in data_dir.glob("**/*.png")}
-            return [all_pngs[f] for f in filenames if f in all_pngs]
+            # Sample filenames first (cheap strings), then resolve paths
+            chosen = rng.sample(filenames, min(n, len(filenames)))
+            subdirs = sorted(data_dir.glob("images*")) or [data_dir]
+            name_to_path: dict[str, Path] = {}
+            for subdir in subdirs:
+                for p in subdir.glob("*.png"):
+                    if p.name in chosen:
+                        name_to_path[p.name] = p
+                    if len(name_to_path) == len(chosen):
+                        break
+                if len(name_to_path) == len(chosen):
+                    break
+            return [name_to_path[f] for f in chosen if f in name_to_path]
 
-    return sorted(data_dir.glob("**/*.png"))
+    return reservoir_sample(data_dir.glob("**/*.png"), n, rng)
 
 
 def main():
@@ -37,13 +60,13 @@ def main():
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
-    paths = find_images(data_dir, args.split)
-    print(f"Found {len(paths)} images")
+    rng = random.Random(args.seed)
+    sample = sample_images(data_dir, args.split, TOTAL, rng)
+    print(f"Showing {len(sample)} images")
 
-    random.seed(args.seed)
-    sample = random.sample(paths, min(TOTAL, len(paths)))
+    thumb_size = (128, 128)
 
-    fig, axes = plt.subplots(GRID, GRID, figsize=(30, 30))
+    fig, axes = plt.subplots(GRID, GRID, figsize=(10, 10))
     fig.suptitle(
         f"Sample Chest X-rays ({args.split or 'all'}) — {len(sample)} images",
         fontsize=20,
@@ -52,12 +75,13 @@ def main():
     for i, ax in enumerate(axes.flat):
         ax.axis("off")
         if i < len(sample):
-            img = Image.open(sample[i]).convert("L")
+            img = Image.open(sample[i])
+            img.thumbnail(thumb_size)
             ax.imshow(img, cmap="gray")
 
     plt.tight_layout()
     out_path = data_dir / "sample_grid.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.savefig(out_path, dpi=100, bbox_inches="tight")
     print(f"Saved grid to {out_path}")
     plt.show()
 
