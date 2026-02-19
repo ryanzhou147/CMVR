@@ -19,6 +19,9 @@ def train_moco(config: dict) -> None:
     output_dir = Path(config["training"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+
     print(f"Device: {device}")
     print("Building dataloader...")
     dataloader = build_moco_dataloader(config)
@@ -71,6 +74,9 @@ def train_moco(config: dict) -> None:
         best_loss = checkpoint.get("best_loss", float("inf"))
         wandb_run_id = checkpoint.get("wandb_run_id")
 
+    if config["training"].get("compile", False):
+        model = torch.compile(model)
+
     wandb.init(
         project="cmvr-ssl",
         name=config["training"]["run_name"],
@@ -94,6 +100,9 @@ def train_moco(config: dict) -> None:
 
             optimizer.zero_grad()
             scaler.scale(loss).backward()
+            if grad_clip := config["training"].get("grad_clip"):
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             scaler.step(optimizer)
             scaler.update()
 
