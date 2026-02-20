@@ -22,7 +22,7 @@ training:
 
 data:
   image_size: 224
-  num_workers: 0           # 18 vCPUs available; 8 keeps GPU saturated
+  num_workers: 4           
   cache_in_ram: true   # load all PNGs into RAM on startup (~2 GB), eliminates disk I/O
   datasets:
     - name: nih
