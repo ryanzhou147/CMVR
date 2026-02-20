@@ -59,5 +59,5 @@ def build_moco_dataloader(config: dict) -> DataLoader:
         pin_memory=True,
         drop_last=True,
         persistent_workers=(nw > 0),
-        prefetch_factor=4,
+        prefetch_factor=(4 if nw > 0 else None),
     )
