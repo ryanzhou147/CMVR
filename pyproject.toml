@@ -15,4 +15,5 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "matplotlib>=3.10.8",
     "wandb>=0.25.0",
+    "scikit-learn>=1.8.0",
 ]
