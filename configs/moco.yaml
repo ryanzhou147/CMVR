@@ -9,7 +9,7 @@ moco:
   temperature: 0.07        # InfoNCE temperature (lower = sharper)
 
 training:
-  run_name: moco-resnet50
+  run_name: moco-resnet50-v2
   batch_size: 384          # try first; if OOM drop to 128 and set lr: 1.5e-2
   lr: 4.5e-2               # SGD learning rate (scaled by batch size: 0.03 * bs/256)
   weight_decay: 1.0e-4
@@ -18,7 +18,7 @@ training:
   grad_clip: 3.0           # Gradient clipping for stability
   compile: false           # torch.compile breaks on MoCo queue ops
   checkpoint_every: 50
-  output_dir: outputs/moco
+  output_dir: outputs/moco-v2
 
 data:
   image_size: 224
@@ -34,13 +34,11 @@ data:
     #   root_dir: /data/mimic-cxr
 
 augmentations:
-  random_crop_scale: [0.2, 1.0]
-  rotation_degrees: 10        # ±10° — models realistic patient positioning variation
+  random_crop_scale: [0.08, 1.0]  # was [0.2, 1.0] — aggressive crops force local feature learning
+  rotation_degrees: 10             # ±10° — models realistic patient positioning variation
   color_jitter_prob: 0.8
-  color_jitter_brightness: 0.4
-  color_jitter_contrast: 0.4
-  color_jitter_saturation: 0.1  # low: grayscale images have no meaningful saturation
-  color_jitter_hue: 0.0         # zero: hue has no meaning in grayscale X-rays
-  grayscale_prob: 0.2
+  color_jitter_brightness: 0.8    # was 0.4 — simulates exposure/kVp variation
+  color_jitter_contrast: 0.8      # was 0.4 — simulates window/level variation
   gaussian_blur_prob: 0.5
   gaussian_blur_kernel: 9
+  gaussian_noise_std: 0.1         # new — simulates X-ray quantum (Poisson) noise
