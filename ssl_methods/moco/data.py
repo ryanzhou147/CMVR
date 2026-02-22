@@ -1,17 +1,34 @@
 """MoCo v2 data pipeline: augmentation transforms and dataloader."""
 
+import torch
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 
 from data.dataset import UnlabeledChestXrayDataset, collect_image_paths
 
 
+class GaussianNoise:
+    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
+
+    def __init__(self, std: float):
+        self.std = std
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return x + torch.randn_like(x) * self.std
+
+
 def get_moco_transforms(config: dict) -> transforms.Compose:
-    """MoCo v2 augmentation pipeline for chest X-rays."""
+    """MoCo v2 augmentation pipeline for chest X-rays.
+
+    Saturation and hue jitter are omitted — they are no-ops on grayscale images
+    (all three RGB channels are identical after convert('RGB')).  RandomGrayscale
+    is likewise dropped for the same reason.  Brightness and contrast jitter are
+    kept and strengthened; Gaussian noise is added to simulate quantum noise.
+    """
     aug = config["augmentations"]
     size = config["data"]["image_size"]
 
-    return transforms.Compose([
+    pipeline = [
         transforms.RandomResizedCrop(size, scale=tuple(aug["random_crop_scale"])),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(aug.get("rotation_degrees", 10)),
@@ -19,17 +36,17 @@ def get_moco_transforms(config: dict) -> transforms.Compose:
             transforms.ColorJitter(
                 brightness=aug["color_jitter_brightness"],
                 contrast=aug["color_jitter_contrast"],
-                saturation=aug["color_jitter_saturation"],
-                hue=aug["color_jitter_hue"],
             )
         ], p=aug["color_jitter_prob"]),
-        transforms.RandomGrayscale(p=aug["grayscale_prob"]),
         transforms.RandomApply([
             transforms.GaussianBlur(kernel_size=aug["gaussian_blur_kernel"]),
         ], p=aug["gaussian_blur_prob"]),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    ]
+    if noise_std := aug.get("gaussian_noise_std", 0.0):
+        pipeline.append(GaussianNoise(noise_std))
+    return transforms.Compose(pipeline)
 
 
 def build_moco_dataloader(config: dict) -> DataLoader:

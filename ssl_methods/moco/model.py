@@ -79,14 +79,17 @@ class MoCo(nn.Module):
     # Forward
     def forward(
         self, x_q: torch.Tensor, x_k: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Compute InfoNCE logits and their ground-truth labels.
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Compute InfoNCE logits, ground-truth labels, and raw query projections.
 
         Returns:
-            logits: ``(N, 1+K)`` — column 0 is the positive pair.
-            labels: ``(N,)`` zeros, so cross-entropy targets the positive.
+            logits:  ``(N, 1+K)`` — column 0 is the positive pair.
+            labels:  ``(N,)`` zeros, so cross-entropy targets the positive.
+            q_raw:   ``(N, dim)`` pre-normalisation query projections, for
+                     optional variance regularisation (VICReg-style).
         """
-        q = F.normalize(self.encoder_q(x_q), dim=1)  # (N, dim)
+        q_raw = self.encoder_q(x_q)              # (N, dim) — unnormalised
+        q = F.normalize(q_raw, dim=1)            # (N, dim)
 
         with torch.no_grad():
             self._momentum_update()
@@ -101,4 +104,4 @@ class MoCo(nn.Module):
         labels = torch.zeros(q.shape[0], dtype=torch.long, device=q.device)
 
         self._dequeue_and_enqueue(k)
-        return logits, labels
+        return logits, labels, q_raw

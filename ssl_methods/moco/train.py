@@ -13,6 +13,16 @@ from ssl_methods.moco.data import build_moco_dataloader
 from ssl_methods.moco.model import MoCo
 
 
+def variance_loss(z: torch.Tensor, gamma: float = 1.0) -> torch.Tensor:
+    """VICReg variance term: penalise any projection dimension with std < gamma.
+
+    Forces the encoder to spread signal across all output dimensions rather
+    than collapsing to a low-rank subspace.  gamma=1.0 matches the VICReg paper.
+    """
+    std = torch.sqrt(z.var(dim=0) + 1e-4)
+    return F.relu(gamma - std).mean()
+
+
 def train_moco(config: dict) -> None:
     """Full MoCo v2 pretraining loop."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,6 +38,7 @@ def train_moco(config: dict) -> None:
     print(f"Total batches per epoch: {len(dataloader)}")
 
     moco_cfg = config["moco"]
+    var_weight = float(moco_cfg.get("var_loss_weight", 0.0))
     model = MoCo(
         encoder_name=moco_cfg["encoder"],
         dim=moco_cfg["dim"],
@@ -95,8 +106,10 @@ def train_moco(config: dict) -> None:
             x_q, x_k = x_q.to(device), x_k.to(device)
 
             with autocast(device_type=device.type, enabled=(device.type == "cuda")):
-                logits, labels = model(x_q, x_k)
-                loss = F.cross_entropy(logits, labels)
+                logits, labels, q_raw = model(x_q, x_k)
+                infonce = F.cross_entropy(logits, labels)
+                var = variance_loss(q_raw) if var_weight > 0 else torch.tensor(0.0)
+                loss = infonce + var_weight * var
 
             optimizer.zero_grad()
             scaler.scale(loss).backward()
@@ -107,9 +120,15 @@ def train_moco(config: dict) -> None:
             scaler.update()
 
             total_loss += loss.item()
-            wandb.log({"loss/step": loss.item()}, step=global_step)
+            log_dict = {"loss/step": loss.item(), "loss/infonce": infonce.item()}
+            if var_weight > 0:
+                log_dict["loss/var"] = var.item()
+            wandb.log(log_dict, step=global_step)
             global_step += 1
-            batch_pbar.set_postfix(loss=f"{loss.item():.6f}")
+            postfix = {"loss": f"{loss.item():.4f}", "infonce": f"{infonce.item():.4f}"}
+            if var_weight > 0:
+                postfix["var"] = f"{var.item():.4f}"
+            batch_pbar.set_postfix(**postfix)
 
         scheduler.step()
         avg_loss = total_loss / len(dataloader)
