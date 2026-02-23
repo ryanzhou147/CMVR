@@ -1,3 +1,4 @@
+import ast
 import csv
 from pathlib import Path
 
@@ -100,8 +101,31 @@ def collect_image_paths(
                     paths.append(img_path)
     elif dataset_name == "mimic-cxr":
         paths = sorted(root.glob("files/**/*.jpg"))
+    elif dataset_name == "padchest":
+        # Find the CSV — name varies between full dataset and Kaggle sample
+        csv_candidates = sorted(root.glob("*.csv"))
+        if not csv_candidates:
+            raise FileNotFoundError(f"No CSV found in {root}")
+        csv_path = csv_candidates[0]
+        paths = []
+        with open(csv_path) as f:
+            for row in csv.DictReader(f):
+                image_id = row.get("ImageID", "").strip()
+                if not image_id:
+                    continue
+                # Full PadChest splits images into numbered subdirs (ImageDir column).
+                # Kaggle sample stores them flat under root.
+                try:
+                    subdir = str(int(float(row["ImageDir"])))
+                    p = root / subdir / image_id
+                except (KeyError, ValueError):
+                    p = root / image_id
+                if not p.exists():
+                    p = root / image_id  # fall back to flat layout
+                if p.exists():
+                    paths.append(p)
     else:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Use 'nih', 'chexpert', or 'mimic-cxr'.")
+        raise ValueError(f"Unknown dataset: {dataset_name}. Use 'nih', 'chexpert', 'mimic-cxr', or 'padchest'.")
 
     return paths
 
