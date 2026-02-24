@@ -9,8 +9,8 @@ barlow:
 
 training:
   run_name: barlow-resnet50-cloud
-  batch_size: 512              # L4 22GB: no momentum encoder, fits 512 (MoCo needed 384 due to queue)
-  lr: 2.0e-3                   # Linear scale from local: 3e-4 × (512/64) = 2.4e-3, rounded down
+  batch_size: 384              # L4 22GB: proj_dim=2048 projector is memory-heavy, 512 OOMs
+  lr: 1.8e-3                   # Linear scale from local: 3e-4 × (384/64) = 1.8e-3
   weight_decay: 1.0e-4
   epochs: 300
   warmup_epochs: 10
