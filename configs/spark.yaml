@@ -19,8 +19,8 @@ spark:
 
 training:
   run_name: spark-resnet50-cloud
-  batch_size: 384              # L4 22GB: grad checkpointing on encoder stages frees skip-connection mem
-  lr: 3.7e-4                   # Sqrt scale from local: 1.5e-4 × √(384/64) = 3.7e-4
+  batch_size: 256              # L4 22GB: decoder upsamples to 224x224, expensive at bs=384
+  lr: 3.0e-4                   # Sqrt scale from local: 1.5e-4 × √(256/64) = 3.0e-4
   weight_decay: 5.0e-2
   epochs: 200                  # Reduced from 400 for speed; SparK converges faster with large batch
   warmup_epochs: 20
