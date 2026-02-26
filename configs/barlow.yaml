@@ -2,17 +2,17 @@
 # Reference: Zbontar et al. 2021 "Barlow Twins: Self-Supervised Learning via Redundancy Reduction"
 
 barlow:
-  encoder: resnet50
-  proj_dim: 2048               # Full-size projector for cloud run (512 for local with bs=64)
+  encoder: resnet18            # ResNet18 ~4x faster than ResNet50; sufficient for homogeneous chest X-rays
+  proj_dim: 2048               # Keep large projector — BarlowTwins quality scales with proj_dim
   proj_hidden_dim: 2048        # Projector hidden width
   lambda_coeff: 0.005          # Off-diagonal weight — 0.005 from paper, lower = more invariance
 
 training:
   run_name: barlow-resnet50-cloud
-  batch_size: 320              # L4 22GB: both views need grad graphs simultaneously = 2x MoCo mem
-  lr: 1.5e-3                   # Linear scale from local: 3e-4 × (320/64) = 1.5e-3
+  batch_size: 512              # grad checkpointing reduces activation mem ~5x, 512 fits easily
+  lr: 2.4e-3                   # Linear scale from local: 3e-4 × (512/64) = 2.4e-3
   weight_decay: 1.0e-4
-  epochs: 300
+  epochs: 200                  # ResNet18 converges faster; 200 sufficient vs ResNet50's 300
   warmup_epochs: 10
   grad_clip: 3.0
   checkpoint_every: 25
@@ -20,7 +20,7 @@ training:
 
 data:
   image_size: 224
-  num_workers: 14              # 16 vCPUs — leave 2 for main process + OS
+  num_workers: 4               # cache_in_ram=True: no disk I/O, fewer workers needed to avoid shm exhaustion
   cache_in_ram: true
   datasets:
     - name: nih
