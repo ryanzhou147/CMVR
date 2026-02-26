@@ -18,24 +18,24 @@ spark:
   norm_pix_loss: true      # Normalise each patch before MSE (prevents DC-component shortcuts)
 
 training:
-  run_name: spark-resnet50
-  batch_size: 64
-  lr: 1.5e-4               # AdamW with cosine schedule
+  run_name: spark-resnet50-cloud
+  batch_size: 384              # L4 22GB: grad checkpointing on encoder stages frees skip-connection mem
+  lr: 3.7e-4                   # Sqrt scale from local: 1.5e-4 × √(384/64) = 3.7e-4
   weight_decay: 5.0e-2
-  epochs: 200
+  epochs: 200                  # Reduced from 400 for speed; SparK converges faster with large batch
   warmup_epochs: 20
   grad_clip: 3.0
-  checkpoint_every: 20
+  checkpoint_every: 25
   output_dir: outputs/spark
 
 data:
   image_size: 224
-  num_workers: 5
+  num_workers: 4               # cache_in_ram=True: no disk I/O; >4 workers exhausts /dev/shm
   cache_in_ram: true
   datasets:
     - name: nih
       root_dir: datasets/nih-chest-xrays
-      txt_file: datasets/nih-chest-xrays/test.txt   # test split (~11k) for local runs
+      # txt_file omitted — use all 112k images for pretraining
 
 augmentations:
   random_crop_scale: [0.2, 1.0]  # lighter than contrastive methods — masking is the hard task
