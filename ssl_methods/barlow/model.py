@@ -10,6 +10,7 @@ At fine-tuning time the projector is discarded; only the backbone is kept.
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint as ckpt
 from torchvision import models
 
 
@@ -60,6 +61,20 @@ class BarlowTwins(nn.Module):
             nn.Linear(proj_hidden_dim, proj_dim, bias=False),
         )
 
+    def _encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Run backbone with gradient checkpointing on each ResNet layer block."""
+        bb = self.backbone
+        x = bb.conv1(x)
+        x = bb.bn1(x)
+        x = bb.relu(x)
+        x = bb.maxpool(x)
+        x = ckpt.checkpoint(bb.layer1, x, use_reentrant=False)
+        x = ckpt.checkpoint(bb.layer2, x, use_reentrant=False)
+        x = ckpt.checkpoint(bb.layer3, x, use_reentrant=False)
+        x = ckpt.checkpoint(bb.layer4, x, use_reentrant=False)
+        x = bb.avgpool(x)
+        return torch.flatten(x, 1)
+
     def forward(
         self, x1: torch.Tensor, x2: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -68,8 +83,8 @@ class BarlowTwins(nn.Module):
         Returns:
             z1, z2: ``(N, proj_dim)`` projection tensors for view 1 and view 2.
         """
-        z1 = self.projector(self.backbone(x1))
-        z2 = self.projector(self.backbone(x2))
+        z1 = self.projector(self._encode(x1))
+        z2 = self.projector(self._encode(x2))
         return z1, z2
 
     def get_features(self, x: torch.Tensor) -> torch.Tensor:
