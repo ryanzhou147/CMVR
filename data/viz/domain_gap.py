@@ -22,6 +22,8 @@ Usage:
 """
 
 import argparse
+import csv
+import gzip
 import random
 from pathlib import Path
 
@@ -39,14 +41,49 @@ from data.dataset import collect_image_paths  # noqa: F401 (used for NIH)
 # ---------------------------------------------------------------------------
 
 def _load_gray(path: Path, size: int = 224) -> np.ndarray:
-    """Load an image as grayscale float32 in [0, 1], resized to size×size."""
-    img = Image.open(path).convert("L")  # force 8-bit grayscale (handles RGB and 16-bit)
-    arr = np.array(img).astype(np.float32)
-    lo, hi = arr.min(), arr.max()
-    arr = (arr - lo) / (hi - lo + 1e-8)
+    """Load an image as grayscale float32 in [0, 1], resized to size×size.
+
+    No per-image normalisation — raw pixel values divided by 255 so that
+    the actual brightness distribution is preserved for comparison.
+    """
+    img = Image.open(path).convert("L")
+    arr = np.array(img).astype(np.float32) / 255.0
     img_pil = Image.fromarray((arr * 255).astype(np.uint8))
     img_pil = img_pil.resize((size, size), Image.BILINEAR)
     return np.array(img_pil, dtype=np.float32) / 255.0
+
+
+def _collect_padchest_pa(root: Path) -> list[Path]:
+    """Return PA/AP-only PadChest image paths using the CSV projection column.
+
+    Falls back to all PNGs if no CSV is found (e.g. no labels file).
+    """
+    root = Path(root)
+    gz_candidates = sorted(root.glob("*.csv.gz"))
+    csv_candidates = sorted(root.glob("*.csv"))
+
+    if not gz_candidates and not csv_candidates:
+        print("  WARNING: no PadChest CSV found — including all views (may include laterals)")
+        return sorted(root.rglob("*.png"))
+
+    # Build a filename→path index for all images on disk
+    disk_index = {p.name: p for p in root.rglob("*.png")}
+
+    def open_csv():
+        if gz_candidates:
+            return gzip.open(gz_candidates[0], "rt", encoding="utf-8", errors="replace")
+        return open(csv_candidates[0], encoding="utf-8", errors="replace")
+
+    pa_paths = []
+    with open_csv() as f:
+        for row in csv.DictReader(f):
+            if row.get("Projection", "").strip() not in ("PA", "AP"):
+                continue
+            image_id = row.get("ImageID", "").strip()
+            if image_id and image_id in disk_index:
+                pa_paths.append(disk_index[image_id])
+
+    return sorted(set(pa_paths))
 
 
 def _sample_paths(paths: list, n: int, seed: int = 42) -> list:
@@ -77,10 +114,9 @@ def main() -> None:
     # ---- Collect paths -------------------------------------------------------
     print("Collecting image paths...")
     nih_paths = collect_image_paths("nih", args.nih_dir)
-    # PadChest: glob all PNGs directly (CSV may reference subdirs we don't have)
-    padchest_paths = sorted(Path(args.padchest_dir).rglob("*.png"))
+    padchest_paths = _collect_padchest_pa(Path(args.padchest_dir))
     print(f"  NIH:      {len(nih_paths):,} images")
-    print(f"  PadChest: {len(padchest_paths):,} images")
+    print(f"  PadChest: {len(padchest_paths):,} PA/AP images")
 
     sample_nih = _sample_paths(nih_paths, args.n_samples)
     sample_pc  = _sample_paths(padchest_paths, args.n_samples)
