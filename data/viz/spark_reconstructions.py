@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
+from scipy.ndimage import gaussian_filter
 from torchvision import transforms
 
 from data.dataset import collect_image_paths
@@ -109,16 +110,39 @@ def main() -> None:
     for i in range(n):
         orig_full = _denorm(imgs[i])
         mask      = mask_px[i, 0].numpy()   # (H,W) binary, 1=masked
-        # pred is in patch-normalised space — use min-max for display
-        recon_display = _norm_display(pred[i])
 
-        # Composite: real visible patches + model's masked patch predictions
-        composite = orig_full * (1 - mask) + recon_display * mask
+        # pred is in patch-normalised space — min-max to [0,1] first
+        recon_raw = _norm_display(pred[i])
+
+        # Re-scale predicted patches to match the brightness/contrast of the
+        # visible patches in this image.  This removes the per-patch colour
+        # discontinuity at boundaries — both visible and predicted regions are
+        # now in the same absolute intensity space.
+        vis_pixels = orig_full[mask == 0]
+        if vis_pixels.size > 0:
+            vis_lo, vis_hi = vis_pixels.min(), vis_pixels.max()
+            recon_display = recon_raw * (vis_hi - vis_lo) + vis_lo
+        else:
+            recon_display = recon_raw
+
+        recon_display = recon_display.clip(0, 1)
+
+        # Smooth the reconstruction to reduce per-patch brightness jumps caused
+        # by norm_pix_loss independent normalisation. sigma=2 blurs the ~1px
+        # boundary region without destroying anatomical structure inside patches.
+        recon_smooth = gaussian_filter(recon_display, sigma=2.0)
+
+        # Soft mask: feather the patch edges so the composite blends gradually
+        # instead of cutting hard at each 32px boundary.
+        soft_mask = gaussian_filter(mask.astype(np.float32), sigma=3.0)
+
+        # Composite: real visible patches + smoothed predictions for masked patches
+        composite = orig_full * (1 - soft_mask) + recon_smooth * soft_mask
 
         for col, display_img in enumerate([
             orig_full,
             orig_full * (1 - mask),   # black where masked
-            recon_display,
+            recon_smooth,
             composite,
         ]):
             axes[i, col].imshow(display_img, cmap="gray", vmin=0, vmax=1, aspect="auto")
