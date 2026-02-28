@@ -83,11 +83,14 @@ def count_labels(data_dir: Path, val_frac: float, seed: int) -> None:
             patient_id = row.get("PatientID", "").strip()
             by_patient.setdefault(patient_id, []).append((image_id, label))
 
-    # Patient-level train/val split
-    patients = sorted(by_patient)
-    random.Random(seed).shuffle(patients)
-    n_val = max(1, int(len(patients) * val_frac))
-    val_patients = set(patients[:n_val])
+    # Patient-level train/val split — hash-based so the assignment is stable
+    # regardless of how many zips are on disk.
+    import hashlib
+    val_patients = {
+        pid for pid in by_patient
+        if int(hashlib.md5(pid.encode()).hexdigest(), 16) % round(1 / val_frac) == 0
+    }
+    patients = list(by_patient)
 
     train_counts: dict[str, int] = {}
     val_counts: dict[str, int] = {}
@@ -102,6 +105,7 @@ def count_labels(data_dir: Path, val_frac: float, seed: int) -> None:
         key=lambda l: -(train_counts.get(l, 0) + val_counts.get(l, 0)),
     )
 
+    n_val = len(val_patients)
     print(f"\nPatients: {len(by_patient)} total  |  train={len(patients)-n_val}  val={n_val}")
     print(f"\n{'label':<45s}  {'train':>6s}  {'val':>5s}  {'total':>6s}  passes")
     print("-" * 75)
