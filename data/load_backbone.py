@@ -1,18 +1,8 @@
-"""Shared backbone loader for CMVR eval scripts.
-
-Auto-detects the SSL method from the checkpoint config and returns a frozen
-nn.Module where ``forward(x)`` → ``(B, feature_dim)`` backbone features.
-
-Supports all four methods: MoCo, DINO, BarlowTwins, SparK.
-"""
-
 import torch
 import torch.nn as nn
 
 
 class _GetFeaturesWrapper(nn.Module):
-    """Exposes a model's get_features() as its forward() method."""
-
     def __init__(self, model: nn.Module):
         super().__init__()
         self.model = model
@@ -22,12 +12,8 @@ class _GetFeaturesWrapper(nn.Module):
 
 
 class _SparKBackbone(nn.Module):
-    """Exposes SparK encoder stages as a ResNet-like backbone.
-
-    Copies the stage references so .layer1/.layer2/.layer3/.layer4 are named
-    children — required for selective layer unfreezing in fine-tuning.
-    """
-
+    # SparK encoder stages aren't direct children of the model, so re-register
+    # them here so unfreeze_for_finetuning can target .layer1/.layer2/etc.
     def __init__(self, model: nn.Module):
         super().__init__()
         self.stem    = model.stem
@@ -51,17 +37,7 @@ def load_feature_extractor(
     device: torch.device,
     random_init: bool = False,
 ) -> nn.Module:
-    """Build a frozen feature extractor from a CMVR checkpoint.
-
-    Args:
-        ckpt:         Loaded checkpoint dict (must contain ``"config"`` key).
-        device:       Target device.
-        random_init:  If True, use the checkpoint architecture but skip loading
-                      weights — creates an identical random-init baseline.
-
-    Returns:
-        Eval-mode, frozen nn.Module: ``forward(x)`` → ``(B, D)`` features.
-    """
+    """Frozen feature extractor from a checkpoint. forward(x) -> (B, D)."""
     config = ckpt["config"]
 
     if "moco" in config:
@@ -86,7 +62,7 @@ def load_feature_extractor(
         model = DINO(encoder_name=cfg["encoder"], out_dim=cfg["out_dim"])
         if not random_init:
             model.load_state_dict(ckpt["model"])
-        extractor = model.student[0]  # ResNet backbone, fc=Identity
+        extractor = model.student[0]
 
     elif "barlow" in config:
         from ssl_methods.barlow.model import BarlowTwins
@@ -132,16 +108,10 @@ def load_raw_backbone(
     device: torch.device,
     random_init: bool = False,
 ) -> tuple[nn.Module, str]:
-    """Return ``(backbone, method)`` for gradient-based fine-tuning.
+    """Backbone with named ResNet stages for gradient-based fine-tuning.
 
-    Unlike ``load_feature_extractor``, the returned backbone has named ResNet
-    stages (``.layer1`` / ``.layer2`` / ``.layer3`` / ``.layer4``) as direct
-    children so callers can selectively unfreeze them.
-
-    All parameters are frozen by default.  Call ``unfreeze_for_finetuning``
-    to open the appropriate layers based on ``method``.
-
-    ``method`` is one of: ``"moco"``, ``"dino"``, ``"barlow"``, ``"spark"``.
+    All parameters start frozen. Call unfreeze_for_finetuning afterwards.
+    Returns (backbone, method) where method is one of: moco, dino, barlow, spark.
     """
     config = ckpt["config"]
 
@@ -180,7 +150,7 @@ def load_raw_backbone(
         )
         if not random_init:
             model.load_state_dict(ckpt["model"])
-        backbone = model.backbone   # torchvision ResNet with fc=Identity
+        backbone = model.backbone
         method = "barlow"
 
     elif "spark" in config:
@@ -211,31 +181,18 @@ def load_raw_backbone(
 
 
 def unfreeze_for_finetuning(backbone: nn.Module, method: str) -> list[str]:
-    """Selectively unfreeze ResNet stages for gradient-based fine-tuning.
-
-    Based on surgical fine-tuning literature:
-      - Contrastive methods (MoCo, BarlowTwins, DINO): unfreeze layer2 onwards.
-        These methods learn strong abstract features in early layers; mid-to-late
-        layers benefit from domain adaptation.
-      - Restorative methods (SparK): unfreeze layer3 onwards.
-        The decoder forces layer3/4 to encode fine-grained spatial detail;
-        layers 1/2 already contain domain-invariant texture features.
-
-    BatchNorm layers are always kept frozen regardless of stage — small
-    fine-tuning datasets would corrupt the pretraining statistics.
-
-    Returns the list of unfrozen stage names.
-    """
+    # Contrastive methods: unfreeze from layer2 up. SparK (restorative) keeps
+    # layer2 frozen because the decoder already adapted those features.
     if method in ("moco", "barlow", "dino"):
         unfreeze = {"layer2", "layer3", "layer4"}
-    else:   # spark — restorative
+    else:
         unfreeze = {"layer3", "layer4"}
 
     for name, child in backbone.named_children():
         for p in child.parameters():
             p.requires_grad_(name in unfreeze)
 
-    # Always freeze BatchNorm — preserve pretraining statistics
+    # BatchNorm stats were computed over 112k images; don't corrupt them
     for m in backbone.modules():
         if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
             for p in m.parameters():
@@ -245,7 +202,6 @@ def unfreeze_for_finetuning(backbone: nn.Module, method: str) -> list[str]:
 
 
 def method_name(ckpt: dict) -> str:
-    """Return a short method identifier for use in output filenames."""
     config = ckpt["config"]
     for key in ("moco", "dino", "barlow", "spark"):
         if key in config:
