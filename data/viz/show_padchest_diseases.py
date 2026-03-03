@@ -101,7 +101,7 @@ def plot_grid(
         for col_idx in range(n_cols):
             ax = axes[row_idx][col_idx]
             if col_idx < len(paths):
-                img = np.array(Image.open(paths[col_idx]).resize((224, 224))).astype(np.float32)
+                img = np.array(Image.open(paths[col_idx])).astype(np.float32)
                 img = (img - img.min()) / (img.max() - img.min() + 1e-8)
                 ax.imshow(img, cmap="gray", vmin=0, vmax=1, aspect="auto")
             else:
