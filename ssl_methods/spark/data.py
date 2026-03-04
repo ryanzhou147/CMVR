@@ -1,9 +1,8 @@
-"""SparK data pipeline — single augmented view per image.
+"""SparK data pipeline: single augmented view per image.
 
-SparK, like MAE, only needs one view per image: the masking provides the
-self-supervised signal.  Augmentations are lighter than MoCo/DINO/BarlowTwins
-— aggressive crops or flips are unnecessary because the reconstruction task
-is already hard.
+SparK only needs one view; the masking is the self-supervised signal.
+Augmentations are lighter than contrastive methods since the reconstruction
+task is already hard enough.
 """
 
 from pathlib import Path
@@ -41,10 +40,10 @@ class SingleViewDataset(Dataset):
         self._cache: list[np.ndarray] | None = None
 
         if cache_in_ram:
-            print(f"  Caching {len(image_paths)} images as 256×256 grayscale arrays...", flush=True)
+            print(f"  Caching {len(image_paths)} images as 256x256 grayscale arrays...", flush=True)
             self._cache = [_load_gray256(p) for p in image_paths]
             mb = sum(a.nbytes for a in self._cache) / 1024**2
-            print(f"  Cache ready — {mb:.0f} MB in RAM.", flush=True)
+            print(f"  Cache ready: {mb:.0f} MB in RAM.", flush=True)
 
     def __len__(self) -> int:
         return len(self.image_paths)
@@ -58,11 +57,6 @@ class SingleViewDataset(Dataset):
 
 
 def get_spark_transforms(config: dict) -> transforms.Compose:
-    """Build the SparK augmentation pipeline for chest X-rays.
-
-    Lighter than contrastive methods — the masking is the hard self-supervised
-    task, so we avoid aggressive crops that would destroy anatomy.
-    """
     aug = config["augmentations"]
     size = config["data"]["image_size"]
 
@@ -96,7 +90,7 @@ def build_spark_dataloader(config: dict) -> DataLoader:
             datasets.append(SingleViewDataset(paths, transform, cache_in_ram=cache_in_ram))
             print(f"  {ds_cfg['name']}: {len(paths)} images from {ds_cfg['root_dir']}")
         else:
-            print(f"  {ds_cfg['name']}: WARNING — no images found in {ds_cfg['root_dir']}")
+            print(f"  {ds_cfg['name']}: WARNING: no images found in {ds_cfg['root_dir']}")
 
     if not datasets:
         raise RuntimeError("No images found across any configured datasets.")

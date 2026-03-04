@@ -1,28 +1,13 @@
-"""SparK — Sparse masked modeling for ResNet backbones.
+"""SparK: masked autoencoder on a ResNet50 backbone.
 
-Reference: Tian et al. 2023 "Designing BERT for Convolutional Networks:
+Reference: Tian et al. 2023, "Designing BERT for Convolutional Networks:
 Sparse and Hierarchical Masked Modeling" (ICLR 2023).
 
-Why SparK over MAE for this project:
-  - MAE's ViT needs large datasets (ImageNet scale) to learn good features.
-  - SparK works with ResNet50, matching the backbone used by MoCo/DINO/BarlowTwins
-    so all four methods produce directly comparable 2048-d features.
-  - Convolutional inductive biases (translation equivariance, local connectivity)
-    are well-matched to chest X-rays, which have consistent anatomy across images.
-
-Architecture:
-  Encoder  — ResNet50, split into 4 stages to extract hierarchical features.
-             Masked patches are zeroed out before the first convolution, which
-             degrades (but does not eliminate) information leakage compared to
-             SparK's original sparse convolutions.  In practice, the masking
-             signal is still strong enough for effective pretraining.
-  Decoder  — Lightweight U-Net decoder with skip connections from all 4 encoder
-             stages. Upsamples from 7×7 → 224×224 and predicts raw pixel values.
-  Loss     — MSE on masked patches only; optional per-patch pixel normalisation
-             (recommended — prevents trivial DC-component solutions).
-
-At fine-tuning time the decoder is discarded; backbone features are extracted
-via global average pool → 2048-d vector, identical to MoCo/DINO/BarlowTwins.
+Encoder: ResNet50 split into 4 stages; masked patches are zeroed before the
+first conv. Decoder: U-Net with skip connections, upsampling 7x7->224x224.
+Loss: MSE on masked patches only, with optional per-patch normalization.
+At fine-tuning time the decoder is discarded; get_features() returns the
+2048-d global-average-pooled layer4 output (same interface as MoCo/Barlow).
 """
 
 import torch
@@ -31,10 +16,6 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as ckpt
 from torchvision import models
 
-
-# ---------------------------------------------------------------------------
-# Decoder building blocks
-# ---------------------------------------------------------------------------
 
 class _ConvUp(nn.Module):
     """ConvTranspose2d 2× upsample + BN + GELU."""
@@ -54,13 +35,8 @@ class _ConvUp(nn.Module):
 class _SparKDecoder(nn.Module):
     """Hierarchical U-Net decoder with skip connections from ResNet50 stages.
 
-    Input feature map dimensions (ResNet50, image_size=224):
-        f1: (B,  256, 56, 56)  — after layer1  (stride 4)
-        f2: (B,  512, 28, 28)  — after layer2  (stride 8)
-        f3: (B, 1024, 14, 14)  — after layer3  (stride 16)
-        f4: (B, 2048,  7,  7)  — after layer4  (stride 32)
-
-    Output: (B, 3, 224, 224) — full-resolution pixel predictions.
+    Inputs: f1 (B,256,56,56), f2 (B,512,28,28), f3 (B,1024,14,14), f4 (B,2048,7,7)
+    Output: (B, 3, 224, 224)
     """
 
     def __init__(self, dec_dim: int = 256):
@@ -116,22 +92,16 @@ class _SparKDecoder(nn.Module):
         return self.pred(x)                                    # (B, 3, 224, 224)
 
 
-# ---------------------------------------------------------------------------
-# SparK
-# ---------------------------------------------------------------------------
-
 class SparK(nn.Module):
     """SparK: masked autoencoder on a ResNet50 backbone.
 
     Args:
-        img_size:       Input image resolution (square).
-        patch_size:     Side length of each masked patch.  Must evenly divide
-                        img_size.  32 → 7×7 grid (49 patches) for 224×224 input;
-                        each 7×7 position in layer4 corresponds to one patch.
-        encoder_name:   torchvision backbone identifier (``"resnet50"``).
-        dec_dim:        Decoder hidden width.
-        mask_ratio:     Fraction of patches to mask during pretraining.
-        norm_pix_loss:  Normalise each patch before MSE (recommended).
+        img_size:      Input image resolution (square).
+        patch_size:    Patch side length; must divide img_size evenly.
+        encoder_name:  torchvision backbone identifier ("resnet50").
+        dec_dim:       Decoder hidden width.
+        mask_ratio:    Fraction of patches masked during pretraining.
+        norm_pix_loss: Normalize each patch before MSE (recommended).
     """
 
     def __init__(
@@ -149,7 +119,6 @@ class SparK(nn.Module):
         self.norm_pix_loss = norm_pix_loss
         self.n_patches = (img_size // patch_size) ** 2
 
-        # ---- Encoder: split ResNet50 into stages ----------------------------
         backbone = getattr(models, encoder_name)(weights=None)
         self.stem = nn.Sequential(
             backbone.conv1, backbone.bn1, backbone.relu, backbone.maxpool
@@ -160,20 +129,12 @@ class SparK(nn.Module):
         self.layer4 = backbone.layer4   # stride 32 → (B, 2048,  7,  7)
         self.avgpool = backbone.avgpool
 
-        # ---- Decoder --------------------------------------------------------
         self.decoder = _SparKDecoder(dec_dim)
-
-    # ---- Masking ------------------------------------------------------------
 
     def _random_mask(
         self, imgs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Zero out ``mask_ratio`` random patches.
-
-        Returns:
-            masked_imgs: same shape as imgs, zeroed at masked patches.
-            mask_px:     (N, 1, H, W) float, 1 = masked, 0 = visible.
-        """
+        """Zero out mask_ratio random patches. Returns (masked_imgs, mask_px)."""
         B, C, H, W = imgs.shape
         p = self.patch_size
         nh, nw = H // p, W // p
@@ -193,14 +154,8 @@ class SparK(nn.Module):
         masked_imgs = imgs * (1.0 - mask_px)
         return masked_imgs, mask_px
 
-    # ---- Pixel normalisation ------------------------------------------------
-
     def _patchwise_normalize(self, imgs: torch.Tensor) -> torch.Tensor:
-        """Normalise each spatial patch to zero-mean unit-variance.
-
-        Prevents the loss from being dominated by absolute intensity
-        (e.g. a bright vs. dark X-ray background).
-        """
+        """Normalize each patch to zero-mean unit-variance to prevent DC-component dominance."""
         B, C, H, W = imgs.shape
         p = self.patch_size
         nh, nw = H // p, W // p
@@ -214,18 +169,10 @@ class SparK(nn.Module):
         # Restore to (B, C, H, W)
         return x.permute(0, 3, 1, 4, 2, 5).reshape(B, C, H, W)
 
-    # ---- Forward / evaluation -----------------------------------------------
-
     def forward(
         self, x: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Pretraining forward pass.
-
-        Returns:
-            loss:     Scalar MSE loss on masked patches.
-            pred:     (N, 3, H, W) full-resolution pixel predictions.
-            mask_px:  (N, 1, H, W) binary mask (1 = masked).
-        """
+        """Return (loss, pred, mask_px) where loss is MSE on masked patches only."""
         masked, mask_px = self._random_mask(x)
 
         # Encode — checkpoint each stage to avoid storing all skip-connection
@@ -236,7 +183,6 @@ class SparK(nn.Module):
         f3 = ckpt.checkpoint(self.layer3, f2, use_reentrant=False)
         f4 = ckpt.checkpoint(self.layer4, f3, use_reentrant=False)
 
-        # Decode
         pred = self.decoder(f1, f2, f3, f4)  # (B, 3, H, W)
 
         target = self._patchwise_normalize(x) if self.norm_pix_loss else x
@@ -244,11 +190,7 @@ class SparK(nn.Module):
         return loss, pred, mask_px
 
     def get_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract 2048-d backbone features for downstream use (no masking).
-
-        Global-average-pooled layer4 output — identical interface to
-        MoCo / DINO / BarlowTwins so the same eval scripts work unchanged.
-        """
+        """Return 2048-d global-average-pooled features (no masking)."""
         h = self.stem(x)
         h = self.layer1(h)
         h = self.layer2(h)
