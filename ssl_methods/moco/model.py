@@ -24,7 +24,7 @@ class MoCo(nn.Module):
     Args:
         encoder_name: torchvision ResNet name (e.g. ``"resnet50"``).
         dim:          Projection head output dimension.
-        K:            Queue size — number of stored negative keys.
+        K:            Queue size (number of stored negative keys).
         m:            EMA coefficient for the momentum key encoder.
         T:            InfoNCE temperature.
     """
@@ -83,12 +83,12 @@ class MoCo(nn.Module):
         """Compute InfoNCE logits, ground-truth labels, and raw query projections.
 
         Returns:
-            logits:  ``(N, 1+K)`` — column 0 is the positive pair.
+            logits:  ``(N, 1+K)``, column 0 is the positive pair.
             labels:  ``(N,)`` zeros, so cross-entropy targets the positive.
             q_raw:   ``(N, dim)`` pre-normalisation query projections, for
                      optional variance regularisation (VICReg-style).
         """
-        q_raw = self.encoder_q(x_q)              # (N, dim) — unnormalised
+        q_raw = self.encoder_q(x_q)              # (N, dim) unnormalised
         q = F.normalize(q_raw, dim=1)            # (N, dim)
 
         with torch.no_grad():
