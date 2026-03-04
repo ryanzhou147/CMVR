@@ -7,13 +7,7 @@ from torchvision import models
 
 
 def build_backbone(encoder_name: str) -> tuple[nn.Module, int]:
-    """Instantiate a backbone and return ``(backbone, feature_dim)``.
-
-    Supports torchvision ResNets (``"resnet18"``, ``"resnet50"``) and
-    Vision Transformers (``"vit_b_16"``, ``"vit_b_32"``, ``"vit_l_16"``).
-    The classification head is replaced with ``nn.Identity`` so the backbone
-    outputs raw feature vectors.
-    """
+    """Return (backbone, feature_dim) with the classifier head replaced by Identity."""
     if encoder_name.startswith("vit"):
         backbone = getattr(models, encoder_name)(weights=None)
         feature_dim: int = backbone.hidden_dim
@@ -26,18 +20,10 @@ def build_backbone(encoder_name: str) -> tuple[nn.Module, int]:
 
 
 class DINOHead(nn.Module):
-    """DINO projection head.
+    """DINO projection head: MLP -> L2-norm -> weight-normed linear.
 
-    Architecture::
-
-        Linear(in_dim → hidden_dim)
-        [GELU → Linear(hidden_dim → hidden_dim)] × (n_layers - 2)
-        GELU → Linear(hidden_dim → bottleneck_dim)
-        L2-normalise
-        weight-norm Linear(bottleneck_dim → out_dim, no bias)
-
-    The weight-norm layer has its magnitude component frozen at 1 so only
-    the direction of each prototype vector is learned.
+    The final layer uses weight_norm with the magnitude frozen at 1, so only
+    the direction of each prototype is learned.
     """
 
     def __init__(
@@ -78,12 +64,12 @@ class DINOHead(nn.Module):
 class DINO(nn.Module):
     """Student-teacher DINO model.
 
-    The teacher is an EMA of the student and never receives gradients.
-    Both share the same backbone + DINOHead architecture.
+    The teacher is an EMA of the student and receives no gradients. Both share
+    the same backbone + DINOHead architecture.
 
     Args:
-        encoder_name: Backbone name passed to :func:`build_backbone`.
-        out_dim:      Prototype dimension for both student and teacher heads.
+        encoder_name: Backbone name passed to build_backbone.
+        out_dim:      Prototype dimension for student and teacher heads.
     """
 
     def __init__(self, encoder_name: str = "vit_b_16", out_dim: int = 65536):
@@ -116,15 +102,7 @@ class DINO(nn.Module):
     def forward(
         self, views: list[torch.Tensor], n_global: int
     ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-        """Forward pass over all views.
-
-        The student sees every view; the teacher sees only the first
-        ``n_global`` (large-crop) views.
-
-        Returns:
-            student_output: ``list`` of ``(B, out_dim)`` tensors — one per view.
-            teacher_output: ``list`` of ``(B, out_dim)`` tensors — global views only.
-        """
+        """Forward all views through student; only global views through teacher."""
         if self._fixed_size is not None:
             s = self._fixed_size
             views = [

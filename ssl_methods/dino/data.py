@@ -66,10 +66,10 @@ class MultiCropDataset(Dataset):
         self._cache: list[np.ndarray] | None = None
 
         if cache_in_ram:
-            print(f"  Caching {len(image_paths)} images as 256×256 grayscale arrays...", flush=True)
+            print(f"  Caching {len(image_paths)} images as 256x256 grayscale arrays...", flush=True)
             self._cache = [_load_gray256(p) for p in image_paths]
             mb = sum(a.nbytes for a in self._cache) / 1024**2
-            print(f"  Cache ready — {mb:.0f} MB in RAM.", flush=True)
+            print(f"  Cache ready: {mb:.0f} MB in RAM.", flush=True)
 
     def __len__(self) -> int:
         return len(self.image_paths)
@@ -143,7 +143,7 @@ def build_dino_dataloader(config: dict) -> DataLoader:
             datasets.append(MultiCropDataset(paths, multicrop, cache_in_ram=cache_in_ram))
             print(f"  {ds_cfg['name']}: {len(paths)} images from {ds_cfg['root_dir']}")
         else:
-            print(f"  {ds_cfg['name']}: WARNING — no images found in {ds_cfg['root_dir']}")
+            print(f"  {ds_cfg['name']}: WARNING: no images found in {ds_cfg['root_dir']}")
 
     if not datasets:
         raise RuntimeError("No images found across any configured datasets.")

@@ -4,7 +4,6 @@ import math
 from pathlib import Path
 
 import torch
-import torch.nn as nn
 import wandb
 from torch.amp import GradScaler, autocast
 from tqdm import tqdm
@@ -123,7 +122,7 @@ def train_dino(config: dict) -> None:
             optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            grad_norm = nn.utils.clip_grad_norm_(model.student.parameters(), 3.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.student.parameters(), 3.0)
             scaler.step(optimizer)
             scaler.update()
 
