@@ -1,11 +1,8 @@
 """BarlowTwins model: shared backbone + 3-layer BatchNorm projector.
 
-Architecture follows Zbontar et al. 2021.  The projector uses BatchNorm
-(not LayerNorm) because the cross-correlation loss is computed over the
-batch dimension — BatchNorm ensures the projections are roughly zero-mean
-and unit-variance, which keeps the correlation matrix well-conditioned.
-
-At fine-tuning time the projector is discarded; only the backbone is kept.
+Architecture follows Zbontar et al. 2021. BatchNorm (not LayerNorm) in the
+projector keeps projections zero-mean/unit-variance, which is required by the
+cross-correlation objective. The projector is discarded at fine-tuning time.
 """
 
 import torch
@@ -15,11 +12,7 @@ from torchvision import models
 
 
 def _build_backbone(encoder_name: str) -> tuple[nn.Module, int]:
-    """Instantiate a backbone and return ``(backbone, feature_dim)``.
-
-    The classification head is replaced with ``nn.Identity`` so the backbone
-    outputs raw feature vectors.
-    """
+    """Return (backbone, feature_dim) with the classifier head replaced by Identity."""
     if encoder_name.startswith("vit"):
         backbone = getattr(models, encoder_name)(weights=None)
         feature_dim: int = backbone.hidden_dim
@@ -34,12 +27,11 @@ def _build_backbone(encoder_name: str) -> tuple[nn.Module, int]:
 class BarlowTwins(nn.Module):
     """BarlowTwins student model.
 
-    Both views pass through the *same* backbone and projector — there is no
-    teacher, no queue, and no momentum EMA.  The loss alone prevents collapse.
+    Both views pass through the same backbone and projector; no teacher, no queue.
 
     Args:
-        encoder_name:     torchvision backbone (e.g. ``"resnet50"``).
-        proj_dim:         Output dimension of the projector (prototype space).
+        encoder_name:     torchvision backbone (e.g. "resnet50").
+        proj_dim:         Output dimension of the projector.
         proj_hidden_dim:  Hidden width of the projector MLP.
     """
 
@@ -78,18 +70,11 @@ class BarlowTwins(nn.Module):
     def forward(
         self, x1: torch.Tensor, x2: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Project both views.
-
-        Returns:
-            z1, z2: ``(N, proj_dim)`` projection tensors for view 1 and view 2.
-        """
+        """Return (z1, z2) projections for both views, shape (N, proj_dim)."""
         z1 = self.projector(self._encode(x1))
         z2 = self.projector(self._encode(x2))
         return z1, z2
 
     def get_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract backbone features for downstream evaluation.
-
-        Returns ``(N, feature_dim)`` — projector is discarded.
-        """
+        """Return (N, feature_dim) backbone features; projector is discarded."""
         return self.backbone(x)

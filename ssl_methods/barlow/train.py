@@ -87,8 +87,6 @@ def train_barlow(config: dict) -> None:
     for epoch in epoch_pbar:
         model.train()
         total_loss = 0.0
-        total_on_diag = 0.0
-        total_off_diag = 0.0
 
         batch_pbar = tqdm(dataloader, desc=f"  Epoch {epoch+1}/{total_epochs}", leave=False)
         for view1, view2 in batch_pbar:

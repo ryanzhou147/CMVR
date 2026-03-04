@@ -9,7 +9,7 @@ The loss has two terms:
 
 C_ij = (sum_b z1_bi · z2_bj) / N  after batch-normalising z1 and z2.
 
-No teacher, no queue, no centering buffer — the cross-correlation objective
+No teacher, no queue, no centering buffer. The cross-correlation objective
 directly prevents both mode collapse and uniform collapse.
 """
 

@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 
-from data.dataset import UnlabeledChestXrayDataset, collect_image_paths
+from data.dataloader import UnlabeledChestXrayDataset, collect_image_paths
 
 
 class GaussianNoise:
@@ -61,7 +61,7 @@ def build_barlow_dataloader(config: dict) -> DataLoader:
             datasets.append(UnlabeledChestXrayDataset(paths, transform, cache_in_ram=cache_in_ram))
             print(f"  {ds_cfg['name']}: {len(paths)} images from {ds_cfg['root_dir']}")
         else:
-            print(f"  {ds_cfg['name']}: WARNING — no images found in {ds_cfg['root_dir']}")
+            print(f"  {ds_cfg['name']}: WARNING: no images found in {ds_cfg['root_dir']}")
 
     if not datasets:
         raise RuntimeError("No images found across any configured datasets.")
