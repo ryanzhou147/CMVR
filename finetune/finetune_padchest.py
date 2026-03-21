@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import json
 import random
 from pathlib import Path
 
@@ -44,8 +45,6 @@ from finetune._padchest_data import (
     load_padchest_splits,
 )
 
-# ── Augmentation (only applied during gradient fine-tuning) ───────────────────
-
 _FINETUNE_TRANSFORM = transforms.Compose([
     transforms.RandomResizedCrop(224, scale=(0.08, 1.0)),
     transforms.RandomHorizontalFlip(),
@@ -71,9 +70,6 @@ class LabeledImageDataset(Dataset):
     def __getitem__(self, idx: int):
         img = self.transform(Image.open(self.paths[idx]).convert("RGB"))
         return img, int(self.labels[idx])
-
-
-# ── Gradient fine-tuning ──────────────────────────────────────────────────────
 
 
 def _prototype_head(
@@ -206,9 +202,6 @@ def run_binary_finetune(
     return acc, f1, auc
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Binary few-shot gradient fine-tuning on PadChest rare diseases"
@@ -229,6 +222,9 @@ def main() -> None:
     parser.add_argument("--lr-backbone", type=float, default=1e-4)
     parser.add_argument("--max-neg-train", type=int, default=5000)
     parser.add_argument("--max-neg-val", type=int, default=2000)
+    parser.add_argument("--wandb-project", type=str, default="cmvr-finetune")
+    parser.add_argument("--wandb-name", type=str, default=None)
+    parser.add_argument("--no-wandb", action="store_true")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -254,32 +250,80 @@ def main() -> None:
         data_dir, set(classes), args.val_frac, args.max_neg_train, args.max_neg_val, args.seed
     )
 
+    # Resume state — keyed by method+epoch so different checkpoints don't clobber each other.
+    state_path = Path(f"{mname}_ep{epoch}_finetune_state.json")
+    all_results: dict = {}
+    wandb_run_id = None
+
+    if state_path.exists():
+        state = json.loads(state_path.read_text())
+        wandb_run_id = state.get("wandb_run_id")
+        for init_name, diseases in state.get("results", {}).items():
+            all_results[init_name] = {
+                disease: {int(k): v for k, v in ns.items()}
+                for disease, ns in diseases.items()
+            }
+        n_done = sum(len(ns) for d in all_results.values() for ns in d.values())
+        print(f"Resuming from {state_path} ({n_done} disease×n pairs complete)")
+
+    def _save() -> None:
+        serializable = {
+            init: {d: {str(n): v for n, v in ns.items()} for d, ns in ds.items()}
+            for init, ds in all_results.items()
+        }
+        state_path.write_text(json.dumps({"wandb_run_id": wandb_run_id, "results": serializable}, indent=2))
+
+    if not args.no_wandb:
+        import wandb
+        run = wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_name or f"{mname}_ep{epoch}_finetune",
+            id=wandb_run_id,
+            resume="allow",
+            config={
+                "method": mname,
+                "epoch": epoch,
+                "n_shots": args.n,
+                "n_trials": N_TRIALS,
+                "epochs": args.epochs,
+                "lr_head": args.lr_head,
+                "lr_backbone": args.lr_backbone,
+                "classes": classes,
+            },
+        )
+        wandb_run_id = run.id
+        _save()
+
     INITS = [
         ("SSL pretrained", False, False),
         ("ImageNet",       False, True),
         ("Random init",    True,  False),
     ]
 
-    # results[init_name][disease][n] = {"auc": (mean, std), "f1": ..., "_raw": ...}
-    all_results: dict = {}
-
     for init_name, is_random, is_imagenet in INITS:
         print(f"\n{'─' * 60}")
         print(f"Init: {init_name}")
         print(f"{'─' * 60}")
-        all_results[init_name] = {}
+        all_results.setdefault(init_name, {})
 
-        if is_imagenet:
-            backbone, bb_method = load_imagenet_raw_backbone(device)
-        else:
-            backbone, bb_method = load_raw_backbone(checkpoint, device, random_init=is_random)
+        backbone = None  # loaded lazily — not loaded at all if everything for this init is cached
 
         for disease in classes:
-            results_n: dict[int, dict] = {}
+            all_results[init_name].setdefault(disease, {})
             pos_tr_paths  = train_by_label[disease]
             pos_val_paths = val_by_label[disease]
 
             for n in sorted(args.n):
+                if n in all_results[init_name][disease]:
+                    print(f"  skip  {disease}  n={n}")
+                    continue
+
+                if backbone is None:
+                    if is_imagenet:
+                        backbone, bb_method = load_imagenet_raw_backbone(device)
+                    else:
+                        backbone, bb_method = load_raw_backbone(checkpoint, device, random_init=is_random)
+
                 trial_metrics: dict[str, list] = {"acc": [], "f1": [], "auc": []}
                 for t in range(N_TRIALS):
                     trial_rng = random.Random(args.seed + t)
@@ -295,13 +339,25 @@ def main() -> None:
                     trial_metrics["acc"].append(acc)
                     trial_metrics["f1"].append(f1)
                     trial_metrics["auc"].append(auc)
+                    if not args.no_wandb:
+                        wandb.log({
+                            f"trial/{init_name}/{disease}/{n}shot/auc": auc,
+                            f"trial/{init_name}/{disease}/{n}shot/f1": f1,
+                        })
 
                 summary = {k: (float(np.mean(v)), float(np.std(v))) for k, v in trial_metrics.items()}
-                results_n[n] = {**summary, "_raw": {k: list(v) for k, v in trial_metrics.items()}}
+                all_results[init_name][disease][n] = {
+                    **summary,
+                    "_raw": {k: list(v) for k, v in trial_metrics.items()},
+                }
+                _save()
 
-            all_results[init_name][disease] = results_n
+                if not args.no_wandb:
+                    wandb.log({
+                        f"mean/{init_name}/{disease}/{n}shot/auc": summary["auc"][0],
+                        f"mean/{init_name}/{disease}/{n}shot/f1": summary["f1"][0],
+                    })
 
-        # Per-disease AUC table for this init.
         shot_labels = ["all" if n == -1 else str(n) for n in sorted(args.n)]
         print(f"\n  {'Disease':<42s}", end="")
         for lbl in shot_labels:
@@ -314,7 +370,6 @@ def main() -> None:
                 print(f"  {m:.3f}±{s:.3f}      ", end="")
             print()
 
-    # ── Significance tests (SSL vs baselines, paired t-test across diseases) ──
     print(f"\nSignificance tests — finetune (paired t-test on AUC, {N_TRIALS} trials)")
     for other in ("ImageNet", "Random init"):
         if other not in all_results:
@@ -327,7 +382,6 @@ def main() -> None:
             lbl = "all" if n == -1 else f"{n:3d}"
             print(f"  {lbl}-shot  SSL vs {other:<15s}: t={t:+.2f}  p={p:.3f}  {sig}")
 
-    # ── Plot: mean AUC vs shot count (log scale) ──────────────────────────────
     fig, ax = plt.subplots(figsize=(7, 5))
     ns = [n for n in sorted(args.n) if n != -1]
     for init_name in all_results:
@@ -349,12 +403,26 @@ def main() -> None:
     ax.set_xticklabels(ns)
     ax.set_ylim(0.4, 1.0)
     ax.grid(True, alpha=0.3)
-
     plt.tight_layout()
     out = Path(f"{mname}_ep{epoch}_finetune_binary.png")
     plt.savefig(out, dpi=150, bbox_inches="tight")
     print(f"\nSaved plot to {out}")
     plt.close()
+
+    if not args.no_wandb:
+        cols = ["init", "disease"] + [f"{n}-shot AUC" for n in sorted(args.n) if n != -1]
+        table = wandb.Table(columns=cols)
+        for init_name in all_results:
+            for disease in classes:
+                row = [init_name, disease]
+                for n in sorted(args.n):
+                    if n == -1:
+                        continue
+                    m, _ = all_results[init_name][disease][n]["auc"]
+                    row.append(round(m, 3))
+                table.add_data(*row)
+        wandb.log({"results_table": table, "plot": wandb.Image(str(out))})
+        wandb.finish()
 
 
 if __name__ == "__main__":
