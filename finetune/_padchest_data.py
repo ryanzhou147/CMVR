@@ -51,7 +51,9 @@ EXCLUDE_LABELS = {
     # common diseases with large public labeled datasets
     "pneumonia", "pleural effusion", "cardiomegaly", "nodule", "atelectasis",
     "laminar atelectasis", "emphysema", "scoliosis", "copd signs", "aortic elongation",
+    "rib fracture",
     # non-specific radiological descriptors
+    "consolidation", "granuloma",
     "increased density", "chronic changes", "infiltrates", "calcified densities",
     "bronchovascular markings", "pseudonodule", "vascular hilar enlargement",
     "apical pleural thickening", "costophrenic angle blunting", "hilar enlargement",
@@ -86,7 +88,10 @@ class ImageDataset(Dataset):
         return len(self.paths)
 
     def __getitem__(self, idx: int):
-        return _TRANSFORM(Image.open(self.paths[idx]).convert("RGB"))
+        try:
+            return _TRANSFORM(Image.open(self.paths[idx]).convert("RGB"))
+        except Exception:
+            return torch.zeros(3, 224, 224)
 
 
 def _parse_labels(raw: str) -> list[str]:
@@ -236,7 +241,7 @@ def extract_features(
 ) -> np.ndarray:
     """Returns L2-normalised (N, D) feature array."""
     dataset = ImageDataset(paths)
-    loader = DataLoader(dataset, batch_size=64, num_workers=4, pin_memory=False)
+    loader = DataLoader(dataset, batch_size=64, num_workers=0, pin_memory=False)
     feats = []
     for imgs in loader:
         feats.append(model(imgs.to(device)).cpu().numpy())
