@@ -123,19 +123,43 @@ def main() -> None:
         eff_ranks.append(eff_rank)
         print(f"std={std:.3f}  mean_cos={cos:.3f}  eff_rank={eff_rank:.1f}")
 
+    _PLOT_RC = {
+        "figure.facecolor":   "#f4f3ef",
+        "axes.facecolor":     "#ffffff",
+        "axes.edgecolor":     "#d0cec8",
+        "axes.labelcolor":    "#555555",
+        "axes.titlecolor":    "#333333",
+        "axes.titlesize":     12,
+        "axes.labelsize":     10,
+        "axes.grid":          True,
+        "grid.color":         "#e8e6e0",
+        "grid.linewidth":     0.7,
+        "grid.linestyle":     "--",
+        "xtick.color":        "#888888",
+        "ytick.color":        "#888888",
+        "xtick.labelsize":    9,
+        "ytick.labelsize":    9,
+        "text.color":         "#555555",
+        "savefig.facecolor":  "#f4f3ef",
+        "axes.spines.top":    False,
+        "axes.spines.right":  False,
+        "lines.linewidth":    1.8,
+        "lines.markersize":   5,
+        "font.family":        "sans-serif",
+    }
+    plt.rcParams.update(_PLOT_RC)
+
     fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
-    axes[0].plot(epochs, stds,      "o-", color="#2196F3")
-    axes[1].plot(epochs, cos_sims,  "o-", color="#FF5722")
-    axes[2].plot(epochs, eff_ranks, "o-", color="#4CAF50")
+    axes[0].plot(epochs, stds,      "o-", color="#6b8cba")
+    axes[1].plot(epochs, cos_sims,  "o-", color="#c47b7b")
+    axes[2].plot(epochs, eff_ranks, "o-", color="#7faa8e")
     axes[0].set_ylabel("Mean feature std  (↑ diverse)")
     axes[1].set_ylabel("Mean pairwise cos  (↓ diverse)")
     axes[2].set_ylabel("Effective rank  (↑ diverse)")
     axes[2].set_xlabel("Epoch")
-    for ax in axes:
-        ax.grid(True, alpha=0.3)
     latest = outputs_dir / "latest.pt"
     run = method_name(torch.load(latest, map_location="cpu", weights_only=False)) if latest.exists() else outputs_dir.name
-    axes[0].set_title(f"Collapse monitor — {run}")
+    axes[0].set_title(f"Collapse monitor — {run}", pad=10)
     plt.tight_layout()
 
     out = Path(f"{run}_collapse.png")
