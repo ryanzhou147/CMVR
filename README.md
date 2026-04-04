@@ -1,11 +1,10 @@
-# XeroShot
-*Xero labels. Xero budget. X-ray foundation models for the long tail of medicine.*
+# CLEAR-CXR
+*Contrastive Learning for Emerging Anomalies and Rarities in Chest X-Rays. For the long tail of medicine.*
 
 SSL pretraining on 112k unlabeled NIH chest X-rays, then few-shot fine-tuning on 10 rare diseases from PadChest. Built to answer a specific question: when a novel disease appears and your hospital has 23 labeled examples, does domain-specific SSL actually help?
 
 The short version: **yes, for MoCo.** SSL pretrained features beat ImageNet initialization at every shot count from 1 to 50, with the gap largest at 1-5 shots where it matters most. DINO failed completely — loss flatlined from epoch 0, final representations worse than random init. All of this ran on a single L4 GPU for $0 on Google Cloud free credits.
 
-Blog post with full write-up: `blog/blog.md`
 
 ---
 
