@@ -29,30 +29,51 @@ COLORS = {
     "Random init":    "#c47b7b",
 }
 
+METHOD_DISPLAY = {
+    "moco":   "MoCo v2",
+    "dino":   "DINO",
+    "barlow": "BarlowTwins",
+    "spark":  "SparK",
+}
+
+# Canonical disease display order (matches show_diseases.py DEFAULT_LABELS)
+DISEASE_ORDER = [
+    "calcified granuloma",
+    "interstitial pattern",
+    "callus rib fracture",
+    "hemidiaphragm elevation",
+    "hiatal hernia",
+    "bronchiectasis",
+    "fibrotic band",
+    "reticular interstitial pattern",
+    "pulmonary mass",
+    "pulmonary fibrosis",
+]
+
 # Clean minimal plot theme — apply once per script with plt.rcParams.update(PLOT_RC)
 PLOT_RC: dict = {
-    "figure.facecolor":      "#f4f3ef",
-    "axes.facecolor":        "#ffffff",
+    "figure.facecolor":      "white",
+    "axes.facecolor":        "white",
     "axes.edgecolor":        "#d0cec8",
     "axes.labelcolor":       "#555555",
     "axes.titlecolor":       "#333333",
-    "axes.titlesize":        13,
-    "axes.labelsize":        11,
+    "axes.titlesize":        16,
+    "axes.labelsize":        14,
     "axes.grid":             True,
     "grid.color":            "#e8e6e0",
     "grid.linewidth":        0.7,
     "grid.linestyle":        "--",
     "xtick.color":           "#888888",
     "ytick.color":           "#888888",
-    "xtick.labelsize":       9,
-    "ytick.labelsize":       9,
+    "xtick.labelsize":       12,
+    "ytick.labelsize":       12,
     "text.color":            "#555555",
     "legend.facecolor":      "#ffffff",
     "legend.edgecolor":      "#d0cec8",
     "legend.labelcolor":     "#555555",
-    "legend.fontsize":       9,
-    "savefig.facecolor":     "#f4f3ef",
-    "savefig.edgecolor":     "#f4f3ef",
+    "legend.fontsize":       12,
+    "savefig.facecolor":     "white",
+    "savefig.edgecolor":     "white",
     "axes.spines.top":       False,
     "axes.spines.right":     False,
     "axes.spines.left":      True,
