@@ -1,14 +1,17 @@
 """Frozen backbone + logistic regression probe for per-disease binary classification on PadChest.
+
 Run this first to compare checkpoints quickly before committing to full fine-tuning.
 
 Usage:
-  python -m finetune.probe --checkpoint outputs/moco-v3/best.pt
-  python -m finetune.probe --checkpoint outputs/moco-v3/best.pt --n 1 5 10 20 all
+  python -m finetune.probe --checkpoint outputs/moco-v2/best.pt
+  python -m finetune.probe --checkpoint outputs/moco-v2/best.pt --n 1 5 10 20 all
 """
 
 import argparse
 import random
 from pathlib import Path
+
+_SEPARATOR = "-" * 60
 
 import numpy as np
 import torch
@@ -134,9 +137,9 @@ def main() -> None:
     all_results: dict = {}  # [init_name][disease][n] = {"auc": (mean, std), "_raw": ...}
 
     for init_name, is_random, is_imagenet in INITS:
-        print(f"\n{'─' * 60}")
+        print(f"\n{_SEPARATOR}")
         print(f"Init: {init_name}")
-        print(f"{'─' * 60}")
+        print(_SEPARATOR)
         all_results[init_name] = {}
 
         if is_imagenet:
@@ -183,7 +186,7 @@ def main() -> None:
                 print(f"  {m:.3f}±{s:.3f}      ", end="")
             print()
 
-    print(f"\nSignificance tests — probe (paired t-test on AUC, {N_TRIALS} trials)")
+    print(f"\nSignificance tests: probe (paired t-test on AUC, {N_TRIALS} trials)")
     for other in ("ImageNet", "Random init"):
         if other not in all_results:
             continue

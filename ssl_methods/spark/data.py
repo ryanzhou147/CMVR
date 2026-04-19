@@ -13,21 +13,11 @@ from PIL import Image
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import transforms
 
-from data import collect_image_paths, _load_gray256
-
-
-class GaussianNoise:
-    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
-
-    def __init__(self, std: float):
-        self.std = std
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return x + torch.randn_like(x) * self.std
+from data import GaussianNoise, _load_gray256, collect_image_paths
 
 
 class SingleViewDataset(Dataset):
-    """Returns one augmented view per image — sufficient for reconstruction-based SSL."""
+    """Returns one augmented view per image, sufficient for reconstruction-based SSL."""
 
     def __init__(
         self,
@@ -57,6 +47,7 @@ class SingleViewDataset(Dataset):
 
 
 def get_spark_transforms(config: dict) -> transforms.Compose:
+    """Build the augmentation pipeline for SparK chest X-ray pretraining."""
     aug = config["augmentations"]
     size = config["data"]["image_size"]
 

@@ -175,7 +175,7 @@ class SparK(nn.Module):
         """Return (loss, pred, mask_px) where loss is MSE on masked patches only."""
         masked, mask_px = self._random_mask(x)
 
-        # Encode — checkpoint each stage to avoid storing all skip-connection
+        # Encode: checkpoint each stage to avoid storing all skip-connection
         # feature maps simultaneously (f1+f2+f3+f4 would exceed L4 22GB)
         h = self.stem(masked)
         f1 = ckpt.checkpoint(self.layer1, h,  use_reentrant=False)

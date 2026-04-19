@@ -1,7 +1,7 @@
 """
 Usage:
-  python -m data.viz.layer_viz --checkpoint outputs/moco-v3/best.pt --disease "hiatal hernia"
-  python -m data.viz.layer_viz --checkpoint outputs/moco-v3/best.pt --disease "bronchiectasis" --n-images 4
+  python -m data.viz.layer_viz --checkpoint outputs/moco-v2/best.pt --disease "hiatal hernia"
+  python -m data.viz.layer_viz --checkpoint outputs/moco-v2/best.pt --disease "bronchiectasis" --n-images 4
 """
 
 import argparse
@@ -100,7 +100,7 @@ def _pred_prob(backbone, coef, intercept, img_tensor):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint", type=str, default="outputs/moco-v3/best.pt")
+    parser.add_argument("--checkpoint", type=str, default="outputs/moco-v2/best.pt")
     parser.add_argument("--disease", type=str, required=True)
     parser.add_argument("--data-dir", type=str, default="datasets/padchest")
     parser.add_argument("--n-images", type=int, default=4)

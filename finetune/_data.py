@@ -1,4 +1,5 @@
 import csv
+import gzip
 import hashlib
 import json
 import random
@@ -20,7 +21,7 @@ N_TRIALS = 10
 MIN_TEST_PER_CLASS = 6    # minimum val examples to include a class
 MIN_TRAIN_PER_CLASS = 15  # need enough to support up to 20-shot sampling
 
-# Included despite fewer val examples — high-priority rare disease.
+# Included despite fewer val examples: high-priority rare disease.
 FORCE_INCLUDE = {"pulmonary fibrosis"}
 
 COLORS = {
@@ -50,7 +51,7 @@ DISEASE_ORDER = [
     "pulmonary fibrosis",
 ]
 
-# Clean minimal plot theme — apply once per script with plt.rcParams.update(PLOT_RC)
+# Clean minimal plot theme. Apply once per script with plt.rcParams.update(PLOT_RC).
 PLOT_RC: dict = {
     "figure.facecolor":      "white",
     "axes.facecolor":        "white",
@@ -142,11 +143,8 @@ class ImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.paths)
 
-    def __getitem__(self, idx: int):
-        try:
-            return _TRANSFORM(Image.open(self.paths[idx]).convert("RGB"))
-        except Exception:
-            return torch.zeros(3, 224, 224)
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return _TRANSFORM(Image.open(self.paths[idx]).convert("RGB"))
 
 
 def _parse_labels(raw: str) -> list[str]:
@@ -157,8 +155,6 @@ def _parse_labels(raw: str) -> list[str]:
 def load_padchest_splits(
     data_dir: Path, val_frac: float = 0.2, seed: int = 42
 ) -> tuple[dict[str, list[Path]], dict[str, list[Path]]]:
-    import gzip
-
     gz_candidates = sorted(data_dir.glob("*.csv.gz"))
     csv_candidates = sorted(data_dir.glob("*.csv"))
     if not gz_candidates and not csv_candidates:
@@ -194,7 +190,7 @@ def load_padchest_splits(
             patient_id = row.get("PatientID", "unknown").strip()
             by_patient.setdefault(patient_id, []).append((disk_index[image_id], label))
 
-    # Hash-stable split — reproducible regardless of zip ordering.
+    # Hash-stable split: reproducible regardless of zip ordering.
     val_patients = {
         pid
         for pid in by_patient
@@ -233,8 +229,6 @@ def load_negative_pool(
     max_val: int = 2000,
     seed: int = 42,
 ) -> tuple[list[Path], list[Path]]:
-    import gzip
-
     gz_candidates = sorted(data_dir.glob("*.csv.gz"))
     disk_index = {
         p.name: p for p in data_dir.rglob("*") if p.suffix.lower() in (".png", ".jpg")

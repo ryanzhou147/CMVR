@@ -1,4 +1,7 @@
-"""MoCo v2 pretraining loop."""
+"""MoCo v2 pretraining loop.
+
+Includes an optional VICReg variance term to prevent dimensional collapse.
+"""
 
 import math
 from pathlib import Path
@@ -17,7 +20,7 @@ def variance_loss(z: torch.Tensor, gamma: float = 1.0) -> torch.Tensor:
     """VICReg variance term: penalise any projection dimension with std < gamma.
 
     Forces the encoder to spread signal across all output dimensions rather
-    than collapsing to a low-rank subspace.  gamma=1.0 matches the VICReg paper.
+    than collapsing to a low-rank subspace. gamma=1.0 matches the VICReg paper.
     """
     std = torch.sqrt(z.var(dim=0) + 1e-4)
     return F.relu(gamma - std).mean()

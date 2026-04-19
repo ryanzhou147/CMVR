@@ -1,4 +1,4 @@
-"""CMVR — CLI entry point for SSL pretraining and downstream tasks."""
+"""CMVR: CLI entry point for SSL pretraining and downstream tasks."""
 
 import argparse
 import multiprocessing

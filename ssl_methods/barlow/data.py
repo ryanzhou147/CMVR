@@ -1,26 +1,14 @@
 """BarlowTwins data pipeline.
 
-Identical structure to MoCo: returns two independently augmented views of
-each image. The augmentation pipeline is tuned for chest X-rays (no
-saturation/hue jitter, which are no-ops on grayscale; Gaussian noise added
-to simulate X-ray quantum noise).
+Identical structure to MoCo: returns two independently augmented views of each
+image. Augmentations are tuned for chest X-rays (no saturation/hue jitter,
+which are no-ops on grayscale; Gaussian noise added to simulate quantum noise).
 """
 
-import torch
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 
-from data.dataloader import UnlabeledChestXrayDataset, collect_image_paths
-
-
-class GaussianNoise:
-    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
-
-    def __init__(self, std: float):
-        self.std = std
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return x + torch.randn_like(x) * self.std
+from data import GaussianNoise, UnlabeledChestXrayDataset, collect_image_paths
 
 
 def get_barlow_transforms(config: dict) -> transforms.Compose:

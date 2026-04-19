@@ -50,7 +50,7 @@ class MoCo(nn.Module):
             p_k.data.copy_(p_q.data)
             p_k.requires_grad = False
 
-        # Queue: shape (dim, K) — each column is one stored key vector.
+        # Queue: shape (dim, K). Each column is one stored key vector.
         self.register_buffer("queue", F.normalize(torch.randn(dim, K), dim=0))
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
@@ -85,7 +85,7 @@ class MoCo(nn.Module):
         Returns:
             logits:  ``(N, 1+K)``, column 0 is the positive pair.
             labels:  ``(N,)`` zeros, so cross-entropy targets the positive.
-            q_raw:   ``(N, dim)`` pre-normalisation query projections, for
+            q_raw:   ``(N, dim)`` pre-normalisation query projections for
                      optional variance regularisation (VICReg-style).
         """
         q_raw = self.encoder_q(x_q)              # (N, dim) unnormalised

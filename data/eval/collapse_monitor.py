@@ -1,12 +1,12 @@
 """Tracks embedding diversity across training checkpoints.
 
 Three metrics on a random sample of images per checkpoint:
-  - mean_std:    per-dimension std averaged across embedding dimensions. Near 0 = collapsed.
-  - mean_cos:    average pairwise cosine similarity. Near 1.0 = collapsed.
+  - mean_std:    per-dimension std averaged across embedding dimensions. Near 0 means collapsed.
+  - mean_cos:    average pairwise cosine similarity. Near 1.0 means collapsed.
   - eff_rank:    exp(H) where H is entropy of the singular value spectrum.
-                 Near 1 = single direction used; near dim = all directions used equally.
+                 Near 1 means a single direction is used; near dim means all directions used equally.
 
-uv run python -m data.eval.collapse_monitor --outputs-dir outputs/moco-v3
+uv run python -m data.eval.collapse_monitor --outputs-dir outputs/moco-v2
 """
 
 import argparse
@@ -37,7 +37,7 @@ class ImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.paths)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> torch.Tensor:
         return _TRANSFORM(Image.open(self.paths[idx]).convert("RGB"))
 
 
@@ -50,7 +50,7 @@ def load_image_paths(data_dir: Path, n: int) -> list[Path]:
 def extract_features(model: torch.nn.Module, paths: list[Path], device: torch.device) -> np.ndarray:
     loader = DataLoader(ImageDataset(paths), batch_size=64, num_workers=4, pin_memory=True)
     feats = [model(imgs.to(device)).cpu().float().numpy() for imgs in loader]
-    return np.concatenate(feats)  # (N, dim) — unnormalised
+    return np.concatenate(feats)  # (N, dim), unnormalised
 
 
 def compute_metrics(feats: np.ndarray) -> tuple[float, float, float]:
@@ -92,7 +92,7 @@ def find_checkpoints(outputs_dir: Path) -> list[tuple[int, Path]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--outputs-dir", type=str, default="outputs/moco-v3")
+    parser.add_argument("--outputs-dir", type=str, default="outputs/moco-v2")
     parser.add_argument("--data-dir", type=str, default="datasets/nih-chest-xrays")
     parser.add_argument("--n", type=int, default=512, help="Images sampled per checkpoint")
     args = parser.parse_args()

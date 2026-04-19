@@ -1,6 +1,6 @@
-"""
-DINO multi-crop data pipeline.
-Produces ``n_global`` large-crop views (used by teacher + student) and
+"""DINO multi-crop data pipeline.
+
+Produces ``n_global`` large-crop views (used by teacher and student) and
 ``n_local`` small-crop views (used by student only).
 """
 
@@ -12,17 +12,7 @@ from PIL import Image
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import transforms
 
-from data import collect_image_paths, _load_gray256
-
-
-class GaussianNoise:
-    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
-
-    def __init__(self, std: float):
-        self.std = std
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return x + torch.randn_like(x) * self.std
+from data import GaussianNoise, _load_gray256, collect_image_paths
 
 
 class MultiCropTransform:

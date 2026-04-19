@@ -4,14 +4,16 @@ Contrastive (MoCo, BarlowTwins, DINO): unfreeze layer2 onwards.
 Restorative (SparK): unfreeze layer3 onwards (layer2 adapted during pretraining).
 
 Usage:
-  python -m finetune.finetune --checkpoint outputs/moco-v3/best.pt
-  python -m finetune.finetune --checkpoint outputs/moco-v3/best.pt --n 5 20 all
+  python -m finetune.finetune --checkpoint outputs/moco-v2/best.pt
+  python -m finetune.finetune --checkpoint outputs/moco-v2/best.pt --n 5 20 all
 """
 
 import argparse
 import json
 import random
 from pathlib import Path
+
+_SEPARATOR = "-" * 60
 
 import numpy as np
 import torch
@@ -55,7 +57,7 @@ _FINETUNE_TRANSFORM = transforms.Compose([
 
 class LabeledImageDataset(Dataset):
     def __init__(self, paths: list[Path], labels: np.ndarray, transform):
-        # Pre-load into memory — avoids disk reads every epoch for small few-shot sets.
+        # Pre-load into memory to avoid disk reads every epoch for small few-shot sets.
         self.images = [Image.open(p).convert("RGB") for p in paths]
         self.labels = labels
         self.transform = transform
@@ -72,7 +74,7 @@ def _prototype_head(
 ) -> nn.Linear:
     """Linear head initialized to per-class mean L2-normalized feature vectors.
 
-    Prototype init gives the head a reasonable starting point with only 5–20 examples —
+    Prototype init gives the head a reasonable starting point with only 5-20 examples;
     random init would need far more gradient steps to learn the same class separation.
     """
     feat_dim = shot_feats.shape[1]
@@ -283,12 +285,12 @@ def main() -> None:
     ]
 
     for init_name, is_random, is_imagenet in INITS:
-        print(f"\n{'─' * 60}")
+        print(f"\n{_SEPARATOR}")
         print(f"Init: {init_name}")
-        print(f"{'─' * 60}")
+        print(_SEPARATOR)
         all_results.setdefault(init_name, {})
 
-        backbone = None  # loaded lazily — skipped entirely if all results already cached
+        backbone = None  # loaded lazily; skipped entirely if all results already cached
 
         for disease in classes:
             all_results[init_name].setdefault(disease, {})
@@ -352,7 +354,7 @@ def main() -> None:
                 print(f"  {m:.3f}±{s:.3f}      ", end="")
             print()
 
-    print(f"\nSignificance tests — paired t-test on AUC, {N_TRIALS} trials")
+    print(f"\nSignificance tests: paired t-test on AUC, {N_TRIALS} trials")
     for other in ("ImageNet", "Random init"):
         if other not in all_results:
             continue

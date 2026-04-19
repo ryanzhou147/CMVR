@@ -1,30 +1,18 @@
-"""MoCo v2 data pipeline: augmentation transforms and dataloader."""
+"""MoCo v2 data pipeline: augmentation transforms and dataloader.
 
-import torch
+Augmentations are tuned for chest X-rays: no saturation/hue jitter (no-ops on
+grayscale), strengthened brightness/contrast jitter, Gaussian noise added to
+simulate quantum noise.
+"""
+
 from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import transforms
 
-from data.dataloader import UnlabeledChestXrayDataset, collect_image_paths
-
-
-class GaussianNoise:
-    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
-
-    def __init__(self, std: float):
-        self.std = std
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return x + torch.randn_like(x) * self.std
+from data import GaussianNoise, UnlabeledChestXrayDataset, collect_image_paths
 
 
 def get_moco_transforms(config: dict) -> transforms.Compose:
-    """MoCo v2 augmentation pipeline for chest X-rays.
-
-    Saturation and hue jitter are omitted. Chest X-rays are grayscale.
-    RandomGrayscale is dropped for the same reason. 
-    Brightness and contrast jitter are kept and strengthened;
-    Gaussian noise is added to simulate quantum noise.
-    """
+    """Build the MoCo v2 augmentation pipeline for chest X-ray pretraining."""
     aug = config["augmentations"]
     size = config["data"]["image_size"]
 

@@ -6,7 +6,7 @@ so the counts shown here exactly match what finetune will use.
 Why a label can fail even when train+val total > 23:
   The split is patient-level (not image-level). 20% of *patients* go to val.
   A rare disease affecting only a few patients can end up with all of them in
-  train by chance, leaving val with 0-2 examples — below the MIN_VAL threshold.
+  train by chance, leaving val with 0-2 examples (below the MIN_VAL threshold).
   Total count doesn't matter; both splits must independently meet their minimums.
   To fix: download more zips covering that disease, or lower MIN_TEST_PER_CLASS.
 
@@ -18,13 +18,15 @@ Usage:
 import argparse
 import ast
 import csv
+import gzip
+import hashlib
 from pathlib import Path
 
 from finetune._data import EXCLUDE_LABELS, MIN_TEST_PER_CLASS, MIN_TRAIN_PER_CLASS
 
 
 def count_labels(data_dir: Path, val_frac: float, seed: int) -> None:
-    # Build disk index — scans all subfolders (21/, 23/, 27/, etc.)
+    # Build disk index: scans all subfolders (21/, 23/, 27/, etc.)
     all_pngs = list(data_dir.rglob("*.png"))
     disk_index = {p.name: p for p in all_pngs}
     subdirs = sorted({p.parent.name for p in all_pngs if p.parent != data_dir})
@@ -38,7 +40,6 @@ def count_labels(data_dir: Path, val_frac: float, seed: int) -> None:
 
     def open_csv():
         if gz_files:
-            import gzip
             return gzip.open(gz_files[0], "rt")
         return open(csv_files[0])
 
@@ -63,9 +64,8 @@ def count_labels(data_dir: Path, val_frac: float, seed: int) -> None:
             patient_id = row.get("PatientID", "").strip()
             by_patient.setdefault(patient_id, []).append((image_id, label))
 
-    # Patient-level train/val split — hash-based so the assignment is stable
+    # Patient-level train/val split: hash-based so the assignment is stable
     # regardless of how many zips are on disk.
-    import hashlib
     val_patients = {
         pid for pid in by_patient
         if int(hashlib.md5(pid.encode()).hexdigest(), 16) % round(1 / val_frac) == 0

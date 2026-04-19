@@ -1,4 +1,3 @@
-import ast
 import csv
 from pathlib import Path
 
@@ -11,6 +10,16 @@ from torchvision import transforms
 
 def _load_gray256(path: Path) -> np.ndarray:
     return np.array(Image.open(path).convert("L"), dtype=np.uint8)
+
+
+class GaussianNoise:
+    """Add zero-mean Gaussian noise to a float tensor. Simulates X-ray quantum noise."""
+
+    def __init__(self, std: float) -> None:
+        self.std = std
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return x + torch.randn_like(x) * self.std
 
 
 class UnlabeledChestXrayDataset(Dataset):
