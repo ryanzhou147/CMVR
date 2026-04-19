@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CHECKPOINTS=(
-    "outputs_cloud/moco-v3/best.pt"
+    "outputs_cloud/moco-v2/best.pt"
     "outputs_cloud/barlow/best.pt"
     "outputs_cloud/spark/best.pt"
 )

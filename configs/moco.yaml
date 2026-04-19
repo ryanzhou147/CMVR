@@ -19,7 +19,7 @@ training:
   grad_clip: 3.0           # Gradient clipping for stability
   compile: false           # torch.compile breaks on MoCo queue ops
   checkpoint_every: 50
-  output_dir: outputs/moco-v3
+  output_dir: outputs/moco-v2
 
 data:
   image_size: 224
