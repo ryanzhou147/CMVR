@@ -11,7 +11,7 @@ pulmonary mass, reticular interstitial pattern
 
 ---
 
-## moco-v3 (ResNet50, ep774)
+## moco-v2 (ResNet50, ep774)
 
 ### SSL pretrained
 | Disease                        | 1-shot AUC   | 5-shot AUC   | 10-shot AUC   | 20-shot AUC   | 50-shot AUC   |
